@@ -106,7 +106,7 @@ void Application::draw()
     sceneData.cameraPosition = glm::vec3(camera.Position.x, camera.Position.y, camera.Position.z);
 
 
-    context->frame_submit([&](CommandBufferInfo& cmd, const SwapchainImageData& swapchainData) {
+    context->frame_submit([&](FrameInFlight& cmd, const SwapchainImageData& swapchainData) {
         auto& commandBuffer = cmd.commandBuffer;
         const auto& drawImage = context->get_draw_image();
         const auto& depthImage = context->get_depth_image();

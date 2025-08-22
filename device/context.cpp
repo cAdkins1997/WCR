@@ -24,7 +24,7 @@ Context::~Context()
 
 }
 
-void Context::frame_submit(const std::function<void(CommandBufferInfo& cmd, SwapchainImageData& swapchainData)>&& func)
+void Context::frame_submit(const std::function<void(FrameInFlight& cmd, SwapchainImageData& swapchainData)>&& func)
 {
     auto deviceHandle = m_device->get_handle();
 
@@ -249,7 +249,7 @@ void Context::submit_work(const CommandBuffer &cmd,
         );
 }
 
-void Context::submit_upload_work(vk::PipelineStageFlagBits2 wait, vk::PipelineStageFlagBits2 signal) {
+void Context::submit_upload_work() {
     const auto deviceHandle = m_device->get_handle();
     const auto [immFence, immPool, immCmd] = m_device->get_immediate_info();
     CommandBuffer cmd;
@@ -258,7 +258,6 @@ void Context::submit_upload_work(vk::PipelineStageFlagBits2 wait, vk::PipelineSt
 
     vk_check(deviceHandle.waitForFences(1, &immFence, true, UINT64_MAX), "Failed to wait for fences");
     vk_check(deviceHandle.resetFences(1, &immFence), "Failed to reset fences");
-
 
     vk::CommandBufferSubmitInfo commandBufferSI(cmd.get_handle());
     const vk::SubmitInfo2 submitInfo({}, nullptr, commandBufferSI);

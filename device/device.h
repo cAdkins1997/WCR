@@ -54,7 +54,7 @@ struct SwapchainImageData
     vk::Semaphore renderEndSemaphore;
 };
 
-struct CommandBufferInfo
+struct FrameInFlight
 {
     Buffer SceneData{};
     vk::CommandPool commandPool;
@@ -76,7 +76,7 @@ public:
     ~Device();
 public:
     std::vector<SwapchainImageData> swapchainImageData;
-    std::array<CommandBufferInfo, MAX_FRAMES_IN_FLIGHT> commandBufferInfos;
+    std::array<FrameInFlight, MAX_FRAMES_IN_FLIGHT> commandBufferInfos;
 
     [[nodiscard]] vk::Device get_handle() const { return handle; }
     [[nodiscard]] vk::Queue get_graphics_queue() const { return graphicsQueue; }

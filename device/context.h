@@ -17,8 +17,8 @@ public:
     explicit Context(std::string_view appName, u32 width, u32 height);
     ~Context();
 
-    void frame_submit(const std::function<void(CommandBufferInfo& cmd, SwapchainImageData& swapchainData)>&& func);
-    [[nodiscard]] CommandBufferInfo& get_fif() const { return m_device->commandBufferInfos[frameNumber % MAX_FRAMES_IN_FLIGHT]; }
+    void frame_submit(const std::function<void(FrameInFlight& cmd, SwapchainImageData& swapchainData)>&& func);
+    [[nodiscard]] FrameInFlight& get_fif() const { return m_device->commandBufferInfos[frameNumber % MAX_FRAMES_IN_FLIGHT]; }
 
     [[nodiscard]] vk::Device get_device_handle() const { return m_device->get_handle(); }
     [[nodiscard]] Device& get_device() const { return *m_device; }
@@ -29,7 +29,7 @@ public:
     [[nodiscard]] GLFWwindow* p_get_window() const { return m_device->get_window_p(); }
     [[nodiscard]] Image& get_draw_image() const { return m_device->get_draw_image(); }
     [[nodiscard]] Image& get_depth_image() const { return m_device->get_depth_image(); }
-    [[nodiscard]] std::array<CommandBufferInfo, MAX_FRAMES_IN_FLIGHT>& get_command_buffer_infos() const { return m_device->commandBufferInfos; }
+    [[nodiscard]] std::array<FrameInFlight, MAX_FRAMES_IN_FLIGHT>& get_command_buffer_infos() const { return m_device->commandBufferInfos; }
     [[nodiscard]] ImmediateCommandInfo get_immediate_info() const { return m_device->get_immediate_info(); }
 
     [[nodiscard]] Buffer create_buffer(
@@ -54,7 +54,7 @@ public:
         vk::PipelineStageFlagBits2 signal,
         vk::Semaphore acquiredSemaphore, vk::Semaphore renderEndSemaphore,
         vk::Fence renderFence) const;
-    void submit_upload_work(vk::PipelineStageFlagBits2 wait, vk::PipelineStageFlagBits2 signal);
+    void submit_upload_work();
     void submit_immediate_work(std::function<void(CommandBuffer cmd)>&& function) const;
 
 private:

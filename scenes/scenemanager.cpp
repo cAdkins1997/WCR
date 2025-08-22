@@ -107,18 +107,8 @@ void SceneManager::draw_scene(const CommandBuffer &cmd, const SceneHandle handle
 
     const auto scene = get_scene(handle);
 
-    //cpu_frustum_culling(scene, viewProjectionMatrix);
 
     cmd.bind_index_buffer(m_resourceData->indexBuffer);
-
-    /*for (const auto&[surface, worldMatrix] : m_renderables) {
-        for (const auto&[surface, worldMatrix] : m_renderables) {
-            pc.renderMatrix = worldMatrix;
-            pc.materialIndex = get_handle_index(surface.material);
-            cmd.set_push_constants(&pc, sizeof(pc), vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment);
-            cmd.draw(surface.indexCount, surface.initialIndex);
-        }
-    }*/
 
     for (const auto nodeHandle : scene.opaqueNodes) {
         const auto node = get_node(nodeHandle);
@@ -131,8 +121,6 @@ void SceneManager::draw_scene(const CommandBuffer &cmd, const SceneHandle handle
         }
 
     }
-
-    //m_renderables.clear();
 }
 
 void SceneManager::cpu_frustum_culling(const Scene& scene, const glm::mat4 &viewProjectionMatrix) {
@@ -837,7 +825,7 @@ void SceneBuilder::upload_scene_data(const GeometricData& geoData, ktxTextureDat
     }
     cmd.end();
 
-    m_context.submit_upload_work(vk::PipelineStageFlagBits2::eNone, vk::PipelineStageFlagBits2::eCopy);
+    m_context.submit_upload_work();
 
     /*m_context.submit_immediate_work([&](const CommandBuffer &cmd) {
         cmd.upload_uniform(lights.data(), lights.size(), lightBuffer);
