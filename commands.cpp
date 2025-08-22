@@ -135,7 +135,7 @@ void CommandBuffer::copy_buffer_to_image(
     const Buffer& buffer,
     const Image& image,
     const vk::ImageLayout layout,
-    const std::vector<vk::BufferImageCopy>& regions) const
+    const std::span<vk::BufferImageCopy>& regions) const
 {
     cmd.copyBufferToImage(buffer.handle, image.handle, layout, regions.size(), regions.data());
 }
@@ -233,7 +233,7 @@ void CommandBuffer::set_up_render_pass(
     renderInfo.layerCount = 1;
     renderInfo.colorAttachmentCount = 1;
 
-    cmd.beginRendering(renderInfo);
+    vkCmdBeginRendering(cmd, &renderInfo);
 }
 
 void CommandBuffer::end_render_pass() const
@@ -296,6 +296,12 @@ void CommandBuffer::set_push_constants(const void* pPushConstants, u64 size,
 void CommandBuffer::draw(const u32 count, const u32 startIndex) const
 {
     cmd.drawIndexed(count, 1, startIndex, 0, 0);
+}
+
+void CommandBuffer::bind_pipeline(vk::PipelineBindPoint bindPoint, const Pipeline &_pipeline) {
+    pipeline = _pipeline;
+    cmd.bindPipeline(bindPoint, pipeline.pipeline);
+    cmd.bindDescriptorSets(bindPoint, pipeline.pipelineLayout, 0, 1, &pipeline.set, 0, nullptr);
 }
 
 Buffer CommandBuffer::make_staging_buffer(const u64 allocSize) const

@@ -1,6 +1,7 @@
 
 #include "device.h"
 
+
 Device::Device(std::string_view appName, const u32 _width, const u32 _height) : width(_width), height(_height)
 {
     init_window();
@@ -14,10 +15,32 @@ Device::Device(std::string_view appName, const u32 _width, const u32 _height) : 
     init_sync_objects();
     init_draw_images();
     init_depth_images();
+    init_imgui();
 }
 
 Device::~Device()
 {
+    handle.waitIdle();
+    for (auto& frame : commandBufferInfos) {
+        handle.destroyCommandPool(frame.commandPool, nullptr);
+        handle.destroyFence(frame.renderFence, nullptr);
+        handle.destroySemaphore(frame.acquiredSemaphore, nullptr);
+    }
+
+    destroy_swapchain();
+
+    vmaDestroyImage(allocator, drawImage.handle, drawImage.allocation);
+    vkDestroyImageView(handle, drawImage.view, nullptr);
+
+    vmaDestroyImage(allocator, depthImage.handle, depthImage.allocation);
+    vkDestroyImageView(handle, depthImage.view, nullptr);
+
+    handle.destroyCommandPool(immediateInfo.immediateCommandPool, nullptr);
+    handle.destroyFence(immediateInfo.immediateFence, nullptr);
+
+    instance.destroySurfaceKHR(surface, nullptr);
+
+    glfwDestroyWindow(window);
 }
 
 void Device::init_window()
@@ -307,6 +330,21 @@ void Device::init_commands()
 
         commandBufferInfos[i].commandBuffer.set_handle(newCmd);
     }
+
+    vk_check(
+        handle.createCommandPool(&commandPoolCI, nullptr, &immediateInfo.immediateCommandPool),
+        "Failed to create immediate command pool"
+    );
+
+    vk::CommandBufferAllocateInfo allocInfo;
+    allocInfo.commandPool = immediateInfo.immediateCommandPool;
+    allocInfo.commandBufferCount = 1;
+    allocInfo.level = vk::CommandBufferLevel::ePrimary;
+
+    vk_check(
+        handle.allocateCommandBuffers(&allocInfo, &immediateInfo.immediateCommandBuffer),
+        "Failed to allocate immediate command buffers"
+    );
 }
 
 void Device::init_sync_objects()
@@ -325,6 +363,11 @@ void Device::init_sync_objects()
             "Failed to create semaphore"
             );
     }
+
+    vk_check(
+        handle.createFence(&fenceCI, nullptr, &immediateInfo.immediateFence),
+        "Failed to create immediate fence"
+    );
 }
 
 void Device::init_allocator()
@@ -334,7 +377,7 @@ void Device::init_allocator()
     vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
 
     VmaAllocatorCreateInfo allocatorInfo{};
-    allocatorInfo.vulkanApiVersion = vk::ApiVersion14;
+    allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_4;
     allocatorInfo.physicalDevice = gpu;
     allocatorInfo.device = handle;
     allocatorInfo.instance = instance;
@@ -350,7 +393,7 @@ void Device::init_allocator()
 void Device::init_draw_images()
 {
     const VkExtent3D drawImageExtent {width, height, 1};
-    drawImage.format = VK_FORMAT_R8G8B8A8_UNORM;
+    drawImage.format = VK_FORMAT_R16G16B16A16_SFLOAT;
     drawImage.extent = drawImageExtent;
 
     VkImageUsageFlags drawImageUsages =
@@ -408,7 +451,7 @@ void Device::init_depth_images()
     imageCI.arrayLayers = 1;
     imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
 
-    VmaAllocationCreateInfo allocationCI;
+    VmaAllocationCreateInfo allocationCI{};
     allocationCI.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     allocationCI.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
@@ -428,6 +471,61 @@ void Device::init_depth_images()
     imageViewCI.subresourceRange = subresourceRange;
 
     vkCreateImageView(handle, &imageViewCI, nullptr, &depthImage.view);
+}
+
+void Device::init_imgui() const {
+        const vk::DescriptorPoolSize poolSizes[] = {
+            { vk::DescriptorType::eSampler, 1000 },
+        { vk::DescriptorType::eCombinedImageSampler, 1000 },
+        { vk::DescriptorType::eSampledImage, 1000 },
+        { vk::DescriptorType::eStorageImage, 1000 },
+        { vk::DescriptorType::eUniformTexelBuffer, 1000 },
+        { vk::DescriptorType::eStorageTexelBuffer, 1000 },
+        { vk::DescriptorType::eUniformBuffer, 1000 },
+        { vk::DescriptorType::eStorageBuffer, 1000 },
+        { vk::DescriptorType::eUniformBufferDynamic, 1000 },
+        { vk::DescriptorType::eStorageBufferDynamic, 1000 },
+        { vk::DescriptorType::eInputAttachment, 1000 }
+        };
+
+        vk::DescriptorPoolCreateInfo poolCI;
+        poolCI.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
+        poolCI.maxSets = 1000;
+        poolCI.poolSizeCount = static_cast<u32>(std::size(poolSizes));
+        poolCI.pPoolSizes = poolSizes;
+
+        vk::DescriptorPool imguiPool;
+        vk_check(
+            handle.createDescriptorPool(&poolCI, nullptr, &imguiPool),
+            "Failed to create descriptor pool"
+        );
+
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+
+        ImGui::StyleColorsDark();
+
+        ImGui_ImplGlfw_InitForVulkan(window, true);
+        ImGui_ImplVulkan_InitInfo initInfo = {};
+        initInfo.Instance = instance;
+        initInfo.PhysicalDevice = gpu;
+        initInfo.Device = handle;
+        initInfo.Queue = graphicsQueue;
+        initInfo.DescriptorPool = imguiPool;
+        initInfo.MinImageCount = 3;
+        initInfo.ImageCount = 3;
+        initInfo.UseDynamicRendering = true;
+
+        initInfo.PipelineRenderingCreateInfo = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
+        initInfo.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
+        constexpr VkFormat colorAttachFormat = VK_FORMAT_B8G8R8A8_SRGB;
+        initInfo.PipelineRenderingCreateInfo.pColorAttachmentFormats = &colorAttachFormat;
+        initInfo.PipelineRenderingCreateInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
+        initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+        ImGui_ImplVulkan_Init(&initInfo);
 }
 
 std::vector<const char*> Device::get_required_extensions()
@@ -456,7 +554,7 @@ bool Device::gpu_is_suitable(vk::PhysicalDevice gpu)
     return indices.is_complete() && extensionsSupported && swapchainAdequate;
 }
 
-QueueFamilyIndices Device::find_queue_families(vk::PhysicalDevice gpu) const
+QueueFamilyIndices Device::find_queue_families(const vk::PhysicalDevice gpu) const
 {
     QueueFamilyIndices indices;
     u32 count = 0;
@@ -597,4 +695,12 @@ vk::Extent2D Device::choose_swap_extent(const vk::SurfaceCapabilitiesKHR& capabi
     );
 
     return actualExtent;
+}
+
+void Device::destroy_swapchain() {
+    handle.destroySwapchainKHR(swapchain, nullptr);
+
+    for (const auto& imageData : swapchainImageData) {
+        handle.destroyImageView(imageData.swapchainImageView, nullptr);
+    }
 }

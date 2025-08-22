@@ -23,7 +23,7 @@ public:
 
     void copy_image(vk::Image src, vk::Image dst, vk::Extent3D srcSize, vk::Extent3D dstSize) const;
     void copy_buffer(const Buffer &bufferSrc, const Buffer &bufferDst, vk::DeviceSize srcOffset, vk::DeviceSize dstOffset, vk::DeviceSize dataSize) const;
-    void copy_buffer_to_image(const Buffer& buffer, const Image& image, vk::ImageLayout layout, const std::vector<vk::BufferImageCopy>& regions) const;
+    void copy_buffer_to_image(const Buffer& buffer, const Image& image, vk::ImageLayout layout, const std::span<vk::BufferImageCopy>& regions) const;
 
     void upload_image(void* data, const Image& image) const;
     void upload_uniform(const void* data, u64 dataSize, const Buffer& uniform) const;
@@ -31,7 +31,7 @@ public:
 
     void dispatch(u32 groupCountX, u32 groupCountY, u32 groupCountZ) const;
 
-    void set_up_render_pass(vk::Extent2D extent, const VkRenderingAttachmentInfo *drawImage, const VkRenderingAttachmentInfo *depthImage) const;
+    void set_up_render_pass(vk::Extent2D extent, const VkRenderingAttachmentInfo* drawImage, const VkRenderingAttachmentInfo* depthImage) const;
     void end_render_pass() const;
     void set_viewport(f32 x, f32 y, f32 minDepth, f32 maxDepth) const;
     void set_viewport(vk::Extent2D extent, f32 minDepth, f32 maxDepth) const;
@@ -43,8 +43,10 @@ public:
     void draw(u32 count, u32 startIndex) const;
 
     void set_handle(const vk::CommandBuffer& _cmd) { cmd = _cmd; }
-    void bind_pipeline(const Pipeline& _pipeline) { pipeline = _pipeline; }
+    void bind_pipeline(vk::PipelineBindPoint bindPoint, const Pipeline& _pipeline);
     void set_allocator(const VmaAllocator& _allocator) { allocator = _allocator; }
+
+    [[nodiscard]] vk::CommandBuffer get_handle() const { return cmd; }
 
 private:
     [[nodiscard]] Buffer make_staging_buffer(u64 allocSize) const;

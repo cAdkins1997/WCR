@@ -5,6 +5,9 @@
 #include "resourcetypes.h"
 
 #include <GLFW/glfw3.h>
+#include <imgui.h>
+#include <backends/imgui_impl_vulkan.h>
+#include <backends/imgui_impl_glfw.h>
 
 #include <functional>
 
@@ -61,6 +64,12 @@ struct CommandBufferInfo
     bool resizeRequested = false;
 };
 
+struct ImmediateCommandInfo {
+    vk::Fence immediateFence;
+    vk::CommandPool immediateCommandPool;
+    vk::CommandBuffer immediateCommandBuffer;
+};
+
 class Device {
 public:
     Device(std::string_view appName, u32 _width, u32 _height);
@@ -79,6 +88,7 @@ public:
     [[nodiscard]] vk::Extent2D get_display_extent() const { return { width, height }; }
     [[nodiscard]] vk::SwapchainKHR get_swapchain() const { return swapchain; }
     [[nodiscard]] GLFWwindow* get_window_p() const { return window; }
+    [[nodiscard]] ImmediateCommandInfo get_immediate_info() const { return immediateInfo; }
 
 private:
     void init_window();
@@ -92,6 +102,7 @@ private:
     void init_allocator();
     void init_draw_images();
     void init_depth_images();
+    void init_imgui() const;
 
 private:
     std::vector<const char*> get_required_extensions();
@@ -102,6 +113,8 @@ private:
     vk::SurfaceFormatKHR choose_swap_surface_format(const std::vector<vk::SurfaceFormatKHR>& availableFormats);
     vk::PresentModeKHR choose_swap_present_mode(const std::vector<vk::PresentModeKHR>& availablePresentModes);
     vk::Extent2D choose_swap_extent(const vk::SurfaceCapabilitiesKHR& capabilities);
+
+    void destroy_swapchain();
 
 private:
     std::string applicationName;
@@ -122,6 +135,8 @@ private:
 
     u32 graphicsQueueIndex{}, computeQueueIndex{}, presentQueueIndex{}, transferQueueIndex{};
     vk::Queue graphicsQueue, computeQueue, presentQueue, transferQueue;
+
+    ImmediateCommandInfo immediateInfo;
 
     VmaAllocator allocator{};
 };
