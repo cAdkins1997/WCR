@@ -5,9 +5,9 @@
 #include <vma/vk_mem_alloc.h>
 
 
-void vk_check(const vk::Result result, const std::string& outputString) {
+void vk_check(const vk::Result result,  const char* outputMessage) {
 #ifdef DEBUG
     if (result != vk::Result::eSuccess)
-        throw std::runtime_error((outputString + ' ' + to_string(result) + '\n'));
+        throw std::runtime_error((outputMessage + to_string(result) + '\n'));
 #endif
 }

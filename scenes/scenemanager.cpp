@@ -110,17 +110,17 @@ void SceneManager::draw_scene(const CommandBuffer &cmd, const SceneHandle handle
 
     cmd.bind_index_buffer(m_resourceData->indexBuffer);
 
-    for (const auto nodeHandle : scene.opaqueNodes) {
-        const auto node = get_node(nodeHandle);
-        auto mesh = get_mesh(node.mesh);
-        for (const auto& surface : mesh.surfaces) {
-            pc.renderMatrix = node.worldMatrix;
-            pc.materialIndex = get_handle_index(surface.material);
-            cmd.set_push_constants(&pc, sizeof(pc), vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment);
-            cmd.draw(surface.indexCount, surface.initialIndex);
-        }
+    cpu_frustum_culling(scene, viewProjectionMatrix);
 
+
+    for (const auto&[surface, worldMatrix] : m_renderables) {
+        pc.renderMatrix = worldMatrix;
+        pc.materialIndex = get_handle_index(surface.material);
+        cmd.set_push_constants(&pc, sizeof(pc), vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment);
+        cmd.draw(surface.indexCount, surface.initialIndex);
     }
+
+    m_renderables.clear();
 }
 
 void SceneManager::cpu_frustum_culling(const Scene& scene, const glm::mat4 &viewProjectionMatrix) {

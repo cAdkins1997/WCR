@@ -89,6 +89,7 @@ public:
     [[nodiscard]] vk::SwapchainKHR get_swapchain() const { return swapchain; }
     [[nodiscard]] GLFWwindow* get_window_p() const { return window; }
     [[nodiscard]] ImmediateCommandInfo get_immediate_info() const { return immediateInfo; }
+    bool recreate_swapchain();
 
 private:
     void init_window();

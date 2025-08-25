@@ -43,6 +43,21 @@ Device::~Device()
     glfwDestroyWindow(window);
 }
 
+bool Device::recreate_swapchain() {
+    if (width <= 0 || height <= 0) return false;
+
+    handle.waitIdle();
+
+    destroy_swapchain();
+
+    init_swapchain();
+
+    for (auto& cmd : commandBufferInfos)
+        cmd.resizeRequested = false;
+
+    return true;
+}
+
 void Device::init_window()
 {
     glfwInit();

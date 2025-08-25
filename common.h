@@ -20,4 +20,4 @@ typedef int64_t i64;
 typedef float f32;
 typedef double f64;
 
-void vk_check(vk::Result result, const std::string& outputString);
+void vk_check(vk::Result result, const char* outputMessage);

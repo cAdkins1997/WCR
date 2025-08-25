@@ -74,7 +74,7 @@
         is gltf file) and converts it into a Resource Data structure that the renderer can understand. It then will upload
         any GPU side data (like images, vertex buffers, etc.) to the GPU in one large immediate mode submission.
 #### Scene Manager
-        This structure take a resource data structure and acts as an interface for operating on it and accessing variable from it.
+#####        This structure take a resource data structure and acts as an interface for operating on it and accessing variable from it.
         To access a resource from this structure you can use one of the various accessor_methods to gain a handle to said resource.
         A the raw resource can still be accessed from a handle but it must passed into a function that will translate the handle into
         the resource that it points to. This should be done with some degree of caution however as this handle out a reference to the
