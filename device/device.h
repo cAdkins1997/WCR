@@ -91,6 +91,8 @@ public:
     [[nodiscard]] ImmediateCommandInfo get_immediate_info() const { return immediateInfo; }
     bool recreate_swapchain();
 
+    void init_imgui() const;
+
 private:
     void init_window();
     void init_instance();
@@ -103,7 +105,6 @@ private:
     void init_allocator();
     void init_draw_images();
     void init_depth_images();
-    void init_imgui() const;
 
 private:
     std::vector<const char*> get_required_extensions();
@@ -113,7 +114,7 @@ private:
     SwapChainSupportDetails query_swapchain_support(vk::PhysicalDevice gpu);
     vk::SurfaceFormatKHR choose_swap_surface_format(const std::vector<vk::SurfaceFormatKHR>& availableFormats);
     vk::PresentModeKHR choose_swap_present_mode(const std::vector<vk::PresentModeKHR>& availablePresentModes);
-    vk::Extent2D choose_swap_extent(const vk::SurfaceCapabilitiesKHR& capabilities);
+    vk::Extent2D choose_swap_extent(const vk::SurfaceCapabilitiesKHR& capabilities) const;
 
     void destroy_swapchain();
 

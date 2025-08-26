@@ -36,7 +36,7 @@ public:
      u64 allocationSize,
      vk::BufferUsageFlags usage,
      VmaMemoryUsage memoryUsage,
-     VmaAllocationCreateFlags flags = VMA_ALLOCATION_CREATE_MAPPED_BIT);
+     VmaAllocationCreateFlags flags = VMA_ALLOCATION_CREATE_MAPPED_BIT) const;
 
     [[nodiscard]] Buffer create_staging_buffer(const u64 size) const;
 
@@ -47,6 +47,8 @@ public:
     void destroy_shader(const Shader& shader) const;
 
     [[nodiscard]] vk::Extent2D get_display_extent() const { return m_device->get_display_extent(); }
+
+    void init_imgui() const;
 
     void submit_work(
         const CommandBuffer& cmd,

@@ -28,7 +28,12 @@ void Context::frame_submit(const std::function<void(FrameInFlight& cmd, Swapchai
 {
     auto deviceHandle = m_device->get_handle();
 
-    auto fif = m_device->commandBufferInfos[frameNumber % MAX_FRAMES_IN_FLIGHT];
+    auto& fif = m_device->commandBufferInfos[frameNumber % MAX_FRAMES_IN_FLIGHT];
+
+    if (fif.resizeRequested) {
+        m_device->recreate_swapchain();
+        return;
+    }
 
     vk_check(
         deviceHandle.waitForFences(1, &fif.renderFence, true, UINT64_MAX),
@@ -37,10 +42,12 @@ void Context::frame_submit(const std::function<void(FrameInFlight& cmd, Swapchai
 
     auto swapchain = m_device->get_swapchain();
 
-    vk_check(
-        deviceHandle.acquireNextImageKHR(swapchain, UINT32_MAX, fif.acquiredSemaphore, nullptr, &swapchainImageIndex),
-        "Failed to acquire next swapchain image!"
-    );
+    auto result = deviceHandle.acquireNextImageKHR(swapchain, UINT32_MAX, fif.acquiredSemaphore, nullptr, &swapchainImageIndex);
+    if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR)
+    {
+        fif.resizeRequested = true;
+        return;
+    }
 
     auto swapchainData = m_device->swapchainImageData[swapchainImageIndex];
 
@@ -52,7 +59,8 @@ void Context::frame_submit(const std::function<void(FrameInFlight& cmd, Swapchai
     func(fif, swapchainData);
 
     const vk::PresentInfoKHR presentInfo(1, &swapchainData.renderEndSemaphore, 1, &swapchain, &swapchainImageIndex);
-    if (const auto result = get_graphic_queue().presentKHR(presentInfo); result == vk::Result::eErrorOutOfDateKHR)
+    result = get_graphic_queue().presentKHR(presentInfo);
+    if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR)
     {
         fif.resizeRequested = true;
         return;
@@ -65,8 +73,7 @@ Buffer Context::create_buffer(
     const u64 allocationSize,
     vk::BufferUsageFlags usage,
     const VmaMemoryUsage memoryUsage,
-    const VmaAllocationCreateFlags flags)
-{
+    const VmaAllocationCreateFlags flags) const {
     usage |= vk::BufferUsageFlagBits::eShaderDeviceAddress;
 
     vk::BufferCreateInfo bufferInfo;
@@ -220,12 +227,16 @@ void Context::destroy_shader(const Shader &shader) const {
     m_device->get_handle().destroy(shader.module);
 }
 
+void Context::init_imgui() const {
+    m_device->init_imgui();
+}
+
 void Context::submit_work(const CommandBuffer &cmd,
-    const vk::PipelineStageFlagBits2 wait,
-    const vk::PipelineStageFlagBits2 signal,
-    const vk::Semaphore acquiredSemaphore,
-    const vk::Semaphore renderEndSemaphore,
-    const vk::Fence renderFence) const
+                          const vk::PipelineStageFlagBits2 wait,
+                          const vk::PipelineStageFlagBits2 signal,
+                          const vk::Semaphore acquiredSemaphore,
+                          const vk::Semaphore renderEndSemaphore,
+                          const vk::Fence renderFence) const
 {
     const vk::CommandBuffer handle = cmd.get_handle();
     const vk::CommandBufferSubmitInfo commandBufferSI(handle);

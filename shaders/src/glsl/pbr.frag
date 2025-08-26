@@ -85,7 +85,7 @@ void main() {
         }
     }
 
-    vec3 ambient = 0.0000001f * albedo;
+    vec3 ambient = 0.000001f * albedo;
     vec3 color = ambient + Lo;
 
     color = color / (color + vec3(1.0f));

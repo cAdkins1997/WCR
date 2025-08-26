@@ -79,34 +79,68 @@ target_link_libraries(
 
 if (${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "AMD64")
     set(GLSL_VALIDATOR "$ENV{VULKAN_SDK}/Bin/glslangValidator.exe")
+    set(SLANGC "$ENV{VULKAN_SDK}/Bin/slangc.exe")
 else()
     set(GLSL_VALIDATOR "$ENV{VULKAN_SDK}/Bin32/glslangValidator.exe")
+    set(SLANGC "$ENV{VULKAN_SDK}/Bin32/slangc.exe")
 endif()
+
 file(GLOB_RECURSE GLSL_SOURCE_FILES
-        "${PROJECT_SOURCE_DIR}/shaders/*.frag"
-        "${PROJECT_SOURCE_DIR}/shaders/*.vert"
-        "${PROJECT_SOURCE_DIR}/shaders/*.comp"
+        "${PROJECT_SOURCE_DIR}/shaders/src/glsl/*.frag"
+        "${PROJECT_SOURCE_DIR}/shaders/src/glsl/*.vert"
+        "${PROJECT_SOURCE_DIR}/shaders/src/glsl/*.comp"
 )
+
+file (GLOB SLANG_SOURCE_FILES "${PROJECT_SOURCE_DIR}/shaders/src/slang/*.slang")
+file (GLOB SLANG_MODULE_FILES "${PROJECT_SOURCE_DIR}/shaders/src/slang/modules/*.slang")
+
 foreach(GLSL ${GLSL_SOURCE_FILES})
-    message(STATUS "BUILDING SHADER")
+    message(STATUS "BUILDING GLSL SHADER")
     get_filename_component(FILE_NAME ${GLSL} NAME)
-    set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/${FILE_NAME}.spv")
+    set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/bin/glsl/${FILE_NAME}.spv")
     message(STATUS ${GLSL})
     add_custom_command(
             OUTPUT ${SPIRV}
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_BINARY_DIR}/shaders/"
-            #COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV}
-            COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV} -gVS
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_BINARY_DIR}/shaders/bin/glsl"
+            COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV} -g
             DEPENDS ${GLSL})
     list(APPEND SPIRV_BINARY_FILES ${SPIRV})
 endforeach(GLSL)
-add_custom_target(
-        Shaders
-        DEPENDS ${SPIRV_BINARY_FILES}
-)
+
+foreach (SLANG_MODULE ${SLANG_MODULE_FILES})
+    message(STATUS "BUILDING SLANG MODULE")
+    get_filename_component(FILE_NAME ${SLANG_MODULE} NAME_WLE)
+    set(MODULE "${PROJECT_SOURCE_DIR}/shaders/src/slang/${FILE_NAME}.slang-module")
+    message(STATUS ${SLANG_MODULE})
+    add_custom_command(
+            OUTPUT ${MODULE}
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_BINARY_DIR}/shaders/src/slang -fvk-use-scalar-layout"
+            COMMAND ${SLANGC} -o ${MODULE} ${SLANG_MODULE})
+    list(APPEND SPIRV_BINARY_FILES ${MODULE})
+endforeach (SLANG_MODULE)
+
+foreach (SLANG ${SLANG_SOURCE_FILES})
+    message(STATUS "BUILDING SLANG SHADER")
+    get_filename_component(FILE_NAME ${SLANG} NAME)
+    set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/bin/slang/${FILE_NAME}.spv")
+    message(STATUS ${SLANG})
+    add_custom_command(
+            OUTPUT ${SPIRV}
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_BINARY_DIR}/shaders/bin/slang -fvk-use-scalar-layout"
+            COMMAND ${SLANGC} -target spirv ${SLANG} -o ${SPIRV} -g)
+    list(APPEND SPIRV_BINARY_FILES ${SPIRV})
+endforeach (SLANG)
+
+add_custom_target(Shaders DEPENDS ${SPIRV_BINARY_FILES})
+
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_SOURCE_DIR}/shaders/"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_SOURCE_DIR}/shaders/bin/glsl"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_SOURCE_DIR}/shaders/bin/slang"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${PROJECT_SOURCE_DIR}/shaders"
-        "${PROJECT_SOURCE_DIR}/shaders"
+        "${PROJECT_SOURCE_DIR}/shaders/src/glsl/"
+        "${PROJECT_SOURCE_DIR}/shaders/src/glsl/"
+
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${PROJECT_SOURCE_DIR}/shaders/src/slang/"
+        "${PROJECT_SOURCE_DIR}/shaders/src/slang/"
 )

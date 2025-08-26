@@ -42,25 +42,24 @@ void process_input(GLFWwindow *window, const f32 deltaTime, u32 &inputDelay, boo
     if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS)
         camera.process_keyboard(DOWN, deltaTime);
 
-    /*if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS &&  inputDelay == 0) {
+    if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS && inputDelay == 0) {
         if (mouseLook) {
             mouseLook = false;
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_CAPTURED);
-            inputDelay += 360;
+            inputDelay += 240;
         }
         else {
             mouseLook = true;
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-            inputDelay += 360;
+            inputDelay += 240;
         }
-    }*/
+    }
 
     if (inputDelay > 0) inputDelay--;
 }
 
 Application::Application(std::string_view appName, u32 width, u32 height)
 {
-
     context = std::make_unique<Context>(appName, width, height);
     resourceData = std::make_shared<ResourceData>();
     descriptorBuilder = std::make_unique<DescriptorBuilder>(context->get_device());
@@ -68,17 +67,20 @@ Application::Application(std::string_view appName, u32 width, u32 height)
     sceneManager = std::make_unique<SceneManager>(resourceData);
 
     const auto windowP = context->p_get_window();
-    /*glfwMakeContextCurrent(windowP);
+    glfwMakeContextCurrent(windowP);
     glfwSetCursorPosCallback(windowP, mouse_callback);
     glfwSetScrollCallback(windowP,  process_scroll);
-    glfwSetInputMode(windowP, GLFW_CURSOR, GLFW_CURSOR_NORMAL);*/
+    glfwSetInputMode(windowP, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetWindowUserPointer(windowP, this);
+
+    context->init_imgui();
 
     init();
     run();
 }
 
 Application::~Application() {
-    auto deviceHandle = context->get_device_handle();
+    const auto deviceHandle = context->get_device_handle();
     auto allocator = context->get_allocator();
     vkDeviceWaitIdle(context->get_device_handle());
     sceneManager->release_gpu_resources(*context);
@@ -228,8 +230,8 @@ void Application::init()
 }
 
 void Application::init_opaque_pipeline() {
-    const Shader vertShader = context->create_shader("../shaders/vertex.vert.spv");
-    const Shader fragShader = context->create_shader("../shaders/pbr.frag.spv");
+    const Shader vertShader = context->create_shader("../shaders/bin/slang/vertex.slang.spv");
+    const Shader fragShader = context->create_shader("../shaders/bin/slang/pbr.slang.spv");
 
     PipelineBuilder pipelineBuilder;
     pipelineBuilder.pipelineLayout = opaquePipeline.pipelineLayout;
@@ -266,9 +268,6 @@ void Application::init_descriptors() {
     descriptorBuilder = std::make_unique<DescriptorBuilder>(context->get_device());
     auto globalSet = descriptorBuilder->build(opaquePipeline.setLayout);
     opaquePipeline.set = globalSet;
-    auto infos = context->get_command_buffer_infos();
-    /*for (const auto& info : infos)
-        descriptorBuilder->write_buffer(info.SceneData.handle, sizeof(SceneData), 0, vk::DescriptorType::eUniformBuffer);*/
 
     sceneBuilder->write_textures(*descriptorBuilder);
     descriptorBuilder->update_set(opaquePipeline.set);
@@ -290,7 +289,6 @@ void Application::init_scene_data() {
     if (gltf.has_value())
         if (const auto scene = sceneBuilder->build_scene(gltf.value()); scene.has_value())
             testScene = scene.value();
-
 }
 
 void Application::init_gui_data() {

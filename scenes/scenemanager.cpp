@@ -106,10 +106,7 @@ void SceneManager::draw_scene(const CommandBuffer &cmd, const SceneHandle handle
     pc.numLights = static_cast<u32>(m_resourceData->lights.size());
 
     const auto scene = get_scene(handle);
-
-
     cmd.bind_index_buffer(m_resourceData->indexBuffer);
-
     cpu_frustum_culling(scene, viewProjectionMatrix);
 
 

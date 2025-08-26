@@ -100,8 +100,8 @@ enum class LightType : u8 {
 };
 
 struct Light {
-    alignas(16) glm::vec3 position{};
-    alignas(16) glm::vec3 colour{};
+    glm::vec3 position{};
+    glm::vec3 colour{};
     f32 intensity{};
     f32 range{};
     f32 innerAngle{};

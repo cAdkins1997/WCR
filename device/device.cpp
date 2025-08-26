@@ -15,7 +15,6 @@ Device::Device(std::string_view appName, const u32 _width, const u32 _height) : 
     init_sync_objects();
     init_draw_images();
     init_depth_images();
-    init_imgui();
 }
 
 Device::~Device()
@@ -163,6 +162,10 @@ void Device::init_device()
     vk::PhysicalDeviceFeatures2 deviceFeatures;
     deviceFeatures = gpu.getFeatures2();
 
+    vk::PhysicalDeviceVulkan11Features deviceVulkan11Features;
+    deviceVulkan11Features.shaderDrawParameters = true;
+    deviceFeatures.pNext = &deviceVulkan11Features;
+
     vk::PhysicalDeviceVulkan12Features deviceVulkan12Features;
     deviceVulkan12Features.bufferDeviceAddress = true;
     deviceVulkan12Features.runtimeDescriptorArray = true;
@@ -178,7 +181,7 @@ void Device::init_device()
     deviceVulkan12Features.scalarBlockLayout = true;
     deviceVulkan12Features.vulkanMemoryModel = true;
     deviceVulkan12Features.vulkanMemoryModelDeviceScope = true;
-    deviceFeatures.pNext = &deviceVulkan12Features;
+    deviceVulkan11Features.pNext = deviceVulkan12Features;
 
     vk::PhysicalDeviceVulkan13Features deviceVulkan13Features;
     deviceVulkan13Features.synchronization2 = true;
@@ -686,10 +689,9 @@ vk::PresentModeKHR Device::choose_swap_present_mode(const std::vector<vk::Presen
     return vk::PresentModeKHR::eFifo;
 }
 
-vk::Extent2D Device::choose_swap_extent(const vk::SurfaceCapabilitiesKHR& capabilities)
-{
+vk::Extent2D Device::choose_swap_extent(const vk::SurfaceCapabilitiesKHR& capabilities) const {
     if (capabilities.currentExtent.width != UINT_MAX) return capabilities.currentExtent;
-    i32 width, height;
+    i32 width{}, height{};
     glfwGetFramebufferSize(window, &width, &height);
 
     vk::Extent2D actualExtent {
@@ -715,7 +717,9 @@ vk::Extent2D Device::choose_swap_extent(const vk::SurfaceCapabilitiesKHR& capabi
 void Device::destroy_swapchain() {
     handle.destroySwapchainKHR(swapchain, nullptr);
 
-    for (const auto& imageData : swapchainImageData) {
-        handle.destroyImageView(imageData.swapchainImageView, nullptr);
+    for (const auto&[swapchainImage, swapchainImageView, renderEndSemaphore] : swapchainImageData) {
+        handle.destroyImageView(swapchainImageView, nullptr);
+        handle.destroyImage(swapchainImage, nullptr);
+        handle.destroySemaphore(renderEndSemaphore, nullptr);
     }
 }
