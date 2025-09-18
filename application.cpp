@@ -105,7 +105,7 @@ void Application::draw()
         10000.f,
         0.1f
         );
-    sceneData.cameraPosition = glm::vec3(camera.Position.x, camera.Position.y, camera.Position.z);
+    sceneData.cameraPosition = camera.Position;
 
 
     context->frame_submit([&](FrameInFlight& cmd, const SwapchainImageData& swapchainData) {
@@ -137,7 +137,7 @@ void Application::draw()
         commandBuffer.image_barrier(drawImage.handle, vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eTransferSrcOptimal);
         commandBuffer.image_barrier(currentSwapchainImage, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
 
-        commandBuffer.copy_image(drawImage.handle, currentSwapchainImage, extent, {displayExtent.width, displayExtent.height});
+        commandBuffer.blit_image(drawImage.handle, currentSwapchainImage, extent, {displayExtent.width, displayExtent.height});
         commandBuffer.image_barrier(currentSwapchainImage, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eColorAttachmentOptimal);
         draw_imgui(cmd.commandBuffer, swapchainData.swapchainImageView, {drawImage.extent.width, drawImage.extent.height});
         commandBuffer.image_barrier(currentSwapchainImage, vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR);

@@ -21,7 +21,7 @@ public:
     vk::PipelineStageFlags2 srcStageFlags, vk::AccessFlags2 srcAccessMask,
     vk::PipelineStageFlags2 dstStageFlags, vk::AccessFlags2 dstAccessMask) const;
 
-    void copy_image(vk::Image src, vk::Image dst, vk::Extent3D srcSize, vk::Extent3D dstSize) const;
+    void blit_image(vk::Image src, vk::Image dst, vk::Extent3D srcSize, vk::Extent3D dstSize) const;
     void copy_buffer(const Buffer &bufferSrc, const Buffer &bufferDst, vk::DeviceSize srcOffset, vk::DeviceSize dstOffset, vk::DeviceSize dataSize) const;
     void copy_buffer_to_image(const Buffer& buffer, const Image& image, vk::ImageLayout layout, const std::span<vk::BufferImageCopy>& regions) const;
 

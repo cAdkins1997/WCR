@@ -84,7 +84,7 @@ void CommandBuffer::memory_barrier(
     cmd.pipelineBarrier2(&dependencyInfo);
 }
 
-void CommandBuffer::copy_image(const vk::Image src, const vk::Image dst, const vk::Extent3D srcSize, const vk::Extent3D dstSize) const
+void CommandBuffer::blit_image(const vk::Image src, const vk::Image dst, const vk::Extent3D srcSize, const vk::Extent3D dstSize) const
 {
     vk::ImageBlit2 blitRegion;
 
