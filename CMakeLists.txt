@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.31)
 project(WCR)
 
-set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 add_executable(WCR main.cpp
         common.h
@@ -29,13 +31,45 @@ add_executable(WCR main.cpp
 )
 
 find_package(Vulkan REQUIRED)
-find_package(zstd CONFIG REQUIRED HINTS "C:/Users/ulver/.vcpkg-clion/vcpkg/packages/zstd_x64-windows")
-find_package(Ktx CONFIG REQUIRED HINTS  "C:/Users/ulver/.vcpkg-clion/vcpkg/packages/ktx_x64-windows")
-find_package(meshoptimizer CONFIG REQUIRED HINTS "C:/Users/ulver/.vcpkg-clion/vcpkg/packages/meshoptimizer_x64-windows")
-find_package(TBB CONFIG REQUIRED HINTS "C:/Users/ulver/.vcpkg-clion/vcpkg/packages/tbb_x64-windows")
-find_package(pxr CONFIG REQUIRED HINTS "C:/Users/ulver/.vcpkg-clion/vcpkg/packages/usd_x64-windows")
 
-add_subdirectory(include/glfw)
+include(FetchContent)
+find_package(zstd CONFIG REQUIRED)
+if (NOT zstd_FOUND)
+    FetchContent_Declare(zstd
+            GIT_REPOSITORY https://github.com/facebook/zstd
+            GIT_TAG dev
+            GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(zstd)
+endif()
+
+find_package(Ktx CONFIG REQUIRED HINTS)
+if (NOT Ktx_FOUND)
+    FetchContent_Declare(Ktx
+            GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software
+            GIT_TAG main
+            GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(Ktx)
+endif()
+
+find_package(meshoptimizer CONFIG REQUIRED)
+if (NOT meshoptimizer_FOUND)
+    FetchContent_Declare(meshoptimizer
+            GIT_REPOSITORY https://github.com/zeux/meshoptimizer
+            GIT_TAG master
+            GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(meshoptimizer)
+endif()
+
+FetchContent_Declare(glfw3
+        GIT_REPOSITORY https://github.com/glfw/glfw
+        GIT_TAG master
+        GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(glfw3)
+
 add_subdirectory(include/fastgltf)
 
 set(IMGUI_PATH ${CMAKE_CURRENT_LIST_DIR}/include/imgui)
@@ -73,16 +107,16 @@ target_link_libraries(
         imgui
         KTX::ktx
         meshoptimizer::meshoptimizer
-        ar gf js tf
-        TBB::tbb TBB::tbbmalloc TBB::tbbmalloc_proxy
 )
 
 if (${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "AMD64")
     set(GLSL_VALIDATOR "$ENV{VULKAN_SDK}/Bin/glslangValidator.exe")
     set(SLANGC "$ENV{VULKAN_SDK}/Bin/slangc.exe")
+    set(DXC "$ENV{VULKAN_SDK}/Bin/dxc.exe")
 else()
     set(GLSL_VALIDATOR "$ENV{VULKAN_SDK}/Bin32/glslangValidator.exe")
     set(SLANGC "$ENV{VULKAN_SDK}/Bin32/slangc.exe")
+    set(DXC "$ENV{VULKAN_SDK}/Bin32/dxc.exe")
 endif()
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES
@@ -114,8 +148,8 @@ foreach (SLANG_MODULE ${SLANG_MODULE_FILES})
     message(STATUS ${SLANG_MODULE})
     add_custom_command(
             OUTPUT ${MODULE}
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_BINARY_DIR}/shaders/src/slang -fvk-use-scalar-layout"
-            COMMAND ${SLANGC} -o ${MODULE} ${SLANG_MODULE})
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_BINARY_DIR}/shaders/src/slang"
+            COMMAND ${SLANGC} -o ${MODULE} ${SLANG_MODULE} -g)
     list(APPEND SPIRV_BINARY_FILES ${MODULE})
 endforeach (SLANG_MODULE)
 
@@ -126,7 +160,7 @@ foreach (SLANG ${SLANG_SOURCE_FILES})
     message(STATUS ${SLANG})
     add_custom_command(
             OUTPUT ${SPIRV}
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_BINARY_DIR}/shaders/bin/slang -fvk-use-scalar-layout"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_BINARY_DIR}/shaders/bin/slang"
             COMMAND ${SLANGC} -target spirv ${SLANG} -o ${SPIRV} -g)
     list(APPEND SPIRV_BINARY_FILES ${SPIRV})
 endforeach (SLANG)
