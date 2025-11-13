@@ -100,16 +100,29 @@ target_link_libraries(
         meshoptimizer
 )
 
-if (${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "AMD64")
-    set(GLSL_VALIDATOR "$ENV{VULKAN_SDK}/Bin/glslangValidator.exe")
-    set(SLANGC "$ENV{VULKAN_SDK}/Bin/slangc.exe")
-    set(DXC "$ENV{VULKAN_SDK}/Bin/dxc.exe")
-else()
-    set(GLSL_VALIDATOR "$ENV{VULKAN_SDK}/Bin32/glslangValidator.exe")
-    set(SLANGC "$ENV{VULKAN_SDK}/Bin32/slangc.exe")
-    set(DXC "$ENV{VULKAN_SDK}/Bin32/dxc.exe")
-endif()
+if (UNIX AND NOT APPLE)
+    if (${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "AMD64")
+        set(GLSL_VALIDATOR "/usr/bin/glslangValidator")
+        set(SLANGC "/usr/bin/slangc")
+        set(DXC "/usr/bin/dxc")
+    else()
+        set(GLSL_VALIDATOR "/usr/bin/glslangValidator")
+        set(SLANGC "/usr/bin/slangc")
+        set(DXC "/usr/bin/dxc")
+    endif()
+endif ()
 
+if (WIN32)
+    if (${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "AMD64")
+        set(GLSL_VALIDATOR "$ENV{VULKAN_SDK}/Bin/glslangValidator.exe")
+        set(SLANGC "$ENV{VULKAN_SDK}/Bin/slangc.exe")
+        set(DXC "$ENV{VULKAN_SDK}/Bin/dxc.exe")
+    else()
+        set(GLSL_VALIDATOR "$ENV{VULKAN_SDK}/Bin32/glslangValidator.exe")
+        set(SLANGC "$ENV{VULKAN_SDK}/Bin32/slangc.exe")
+        set(DXC "$ENV{VULKAN_SDK}/Bin32/dxc.exe")
+    endif()
+endif ()
 file(GLOB_RECURSE GLSL_SOURCE_FILES
         "${PROJECT_SOURCE_DIR}/shaders/src/glsl/*.frag"
         "${PROJECT_SOURCE_DIR}/shaders/src/glsl/*.vert"
