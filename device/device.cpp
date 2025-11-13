@@ -93,8 +93,6 @@ void Device::init_instance()
     vk::DebugUtilsMessengerCreateInfoEXT debugCI;
 
     if (enableValidationLayers) {
-        instanceCI.enabledLayerCount = static_cast<u32>(validationLayers.size());
-        instanceCI.ppEnabledLayerNames = validationLayers.data();
         debugCI.messageSeverity =
                 vk::DebugUtilsMessageSeverityFlagBitsEXT::eError | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning;
         debugCI.messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
@@ -201,12 +199,6 @@ void Device::init_device()
     deviceCI.pQueueCreateInfos = queueCIs.data();
     deviceCI.enabledExtensionCount = static_cast<u32>(deviceExtensions.size());
     deviceCI.ppEnabledExtensionNames = deviceExtensions.data();
-
-    if (enableValidationLayers) {
-        deviceCI.enabledLayerCount = static_cast<u32>(validationLayers.size());
-        deviceCI.ppEnabledLayerNames = validationLayers.data();
-    }
-    else deviceCI.enabledLayerCount = 0;
 
     handle = gpu.createDevice(deviceCI, nullptr);
 
@@ -690,7 +682,7 @@ vk::PresentModeKHR Device::choose_swap_present_mode(const std::vector<vk::Presen
 }
 
 vk::Extent2D Device::choose_swap_extent(const vk::SurfaceCapabilitiesKHR& capabilities) const {
-    if (capabilities.currentExtent.width != UINT_MAX) return capabilities.currentExtent;
+    if (capabilities.currentExtent.width != std::numeric_limits<u32>::max()) return capabilities.currentExtent;
     i32 width{}, height{};
     glfwGetFramebufferSize(window, &width, &height);
 

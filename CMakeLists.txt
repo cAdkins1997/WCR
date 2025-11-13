@@ -33,35 +33,26 @@ add_executable(WCR main.cpp
 find_package(Vulkan REQUIRED)
 
 include(FetchContent)
-find_package(zstd CONFIG REQUIRED)
-if (NOT zstd_FOUND)
-    FetchContent_Declare(zstd
-            GIT_REPOSITORY https://github.com/facebook/zstd
-            GIT_TAG dev
-            GIT_SHALLOW TRUE
-    )
-    FetchContent_MakeAvailable(zstd)
-endif()
+FetchContent_Declare(zstd
+        GIT_REPOSITORY https://github.com/facebook/zstd
+        GIT_TAG dev
+        GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(zstd)
 
-find_package(Ktx CONFIG REQUIRED HINTS)
-if (NOT Ktx_FOUND)
-    FetchContent_Declare(Ktx
-            GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software
-            GIT_TAG main
-            GIT_SHALLOW TRUE
-    )
-    FetchContent_MakeAvailable(Ktx)
-endif()
+FetchContent_Declare(meshoptimizer
+        GIT_REPOSITORY https://github.com/zeux/meshoptimizer
+        GIT_TAG master
+        GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(meshoptimizer)
 
-find_package(meshoptimizer CONFIG REQUIRED)
-if (NOT meshoptimizer_FOUND)
-    FetchContent_Declare(meshoptimizer
-            GIT_REPOSITORY https://github.com/zeux/meshoptimizer
-            GIT_TAG master
-            GIT_SHALLOW TRUE
-    )
-    FetchContent_MakeAvailable(meshoptimizer)
-endif()
+FetchContent_Declare(ktx
+        GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software
+        GIT_TAG v4.4.2
+        GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(ktx)
 
 FetchContent_Declare(glfw3
         GIT_REPOSITORY https://github.com/glfw/glfw
@@ -105,8 +96,8 @@ target_link_libraries(
         glfw
         fastgltf::fastgltf
         imgui
-        KTX::ktx
-        meshoptimizer::meshoptimizer
+        ktx
+        meshoptimizer
 )
 
 if (${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "AMD64")

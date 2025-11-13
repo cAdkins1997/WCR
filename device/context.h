@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 
 #include <fstream>
+#include <memory>
 
 struct SceneData {
     glm::mat4 view;
