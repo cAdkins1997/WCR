@@ -67,11 +67,10 @@ Application::Application(std::string_view appName, u32 width, u32 height)
     sceneManager = std::make_unique<SceneManager>(resourceData);
 
     const auto windowP = context->p_get_window();
-    glfwMakeContextCurrent(windowP);
     glfwSetCursorPosCallback(windowP, mouse_callback);
     glfwSetScrollCallback(windowP,  process_scroll);
     glfwSetInputMode(windowP, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    glfwSetWindowUserPointer(windowP, this);
+    glfwSetWindowUserPointer(windowP, &context->get_device());
 
     context->init_imgui();
 
@@ -101,7 +100,7 @@ void Application::draw()
     sceneData.view = camera.get_view_matrix();
     sceneData.projection = glm::perspective(
         glm::radians(camera.zoom),
-        static_cast<float>(context->get_draw_image().extent.width) / static_cast<float>(context->get_draw_image().extent.height),
+        static_cast<float>(context->get_display_extent().width) / static_cast<float>(context->get_display_extent().height),
         10000.f,
         0.1f
         );
@@ -113,8 +112,9 @@ void Application::draw()
         const auto& drawImage = context->get_draw_image();
         const auto& depthImage = context->get_depth_image();
         auto& currentSwapchainImage = swapchainData.swapchainImage;
-        auto extent = drawImage.extent;
-        auto displayExtent = context->get_display_extent();
+        const auto displayExtent = context->get_display_extent();
+        const auto drawAttachment = context->get_draw_attachment();
+        const auto depthAttachment = context->get_depth_attachment();
 
         descriptorBuilder->write_buffer(cmd.SceneData.handle, sizeof(SceneData), 0, vk::DescriptorType::eUniformBuffer);
         descriptorBuilder->update_set(opaquePipeline.set);
@@ -125,10 +125,10 @@ void Application::draw()
         commandBuffer.image_barrier(drawImage.handle, vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
         commandBuffer.image_barrier(depthImage.handle, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthAttachmentOptimal);
 
-        commandBuffer.set_up_render_pass({extent.width, extent.height}, &drawAttachment, &depthAttachment);
+        commandBuffer.set_up_render_pass(displayExtent, &drawAttachment, &depthAttachment);
         commandBuffer.bind_pipeline(vk::PipelineBindPoint::eGraphics, opaquePipeline);
-        commandBuffer.set_viewport({extent.width, extent.height}, 0.0f, 1.0f);
-        commandBuffer.set_scissor(extent.width, extent.height);
+        commandBuffer.set_viewport(displayExtent, 0.0f, 1.0f);
+        commandBuffer.set_scissor(displayExtent);
 
         sceneManager->draw_scene(commandBuffer, testScene, sceneData.projection * sceneData.view);
 
@@ -137,9 +137,9 @@ void Application::draw()
         commandBuffer.image_barrier(drawImage.handle, vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eTransferSrcOptimal);
         commandBuffer.image_barrier(currentSwapchainImage, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
 
-        commandBuffer.blit_image(drawImage.handle, currentSwapchainImage, extent, {displayExtent.width, displayExtent.height});
+        commandBuffer.blit_image(drawImage.handle, currentSwapchainImage, to_extent_3D(displayExtent), to_extent_3D(displayExtent));
         commandBuffer.image_barrier(currentSwapchainImage, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eColorAttachmentOptimal);
-        draw_imgui(cmd.commandBuffer, swapchainData.swapchainImageView, {drawImage.extent.width, drawImage.extent.height});
+        draw_imgui(cmd.commandBuffer, swapchainData.swapchainImageView, displayExtent);
         commandBuffer.image_barrier(currentSwapchainImage, vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR);
         commandBuffer.end();
 
@@ -162,14 +162,14 @@ void Application::draw_imgui(const CommandBuffer &cmd, const vk::ImageView view,
     ImGui::BeginChild("Light Settings");
     ImGui::Text("Light Settings");
 
-    auto label = "Lights";
+    const auto label = "Lights";
     ImGui::Combo(label, &imguiVariables.selectedLight, imguiVariables.lightNames, imguiVariables.numLights);
     Light* currentLight = &imguiVariables.lights[imguiVariables.selectedLight];
 
-    if (ImGui::InputFloat3("Position", reinterpret_cast<float*>(&currentLight->position)))
+    if (ImGui::InputFloat3("Position", reinterpret_cast<f32*>(&currentLight->position)))
         imguiVariables.lightsDirty = true;
 
-    if (ImGui::ColorPicker3("Colour", reinterpret_cast<float*>(&currentLight->colour), ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_Float))
+    if (ImGui::ColorPicker3("Colour", reinterpret_cast<f32*>(&currentLight->colour), ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_Float))
         imguiVariables.lightsDirty = true;
 
     if (ImGui::DragFloat("Intensity", &currentLight->intensity, 0.001f, 0.0f, 1.0f))
@@ -192,8 +192,7 @@ void Application::draw_imgui(const CommandBuffer &cmd, const vk::ImageView view,
 
     VkRenderingInfo renderInfo {.sType = VK_STRUCTURE_TYPE_RENDERING_INFO, .pNext = nullptr};
     vk::Rect2D renderArea{};
-    renderArea.extent.height = extent.height;
-    renderArea.extent.width = extent.width;
+    renderArea.extent = extent;
     renderInfo.renderArea = renderArea;
     renderInfo.pColorAttachments = &ImGUIDrawImage;
     renderInfo.colorAttachmentCount = 1;
@@ -249,19 +248,6 @@ void Application::init_opaque_pipeline() {
 
     context->destroy_shader(vertShader);
     context->destroy_shader(fragShader);
-
-    drawAttachment = VkRenderingAttachmentInfo{.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO, .pNext = nullptr};
-    drawAttachment.imageView = context->get_draw_image().view;
-    drawAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    drawAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    drawAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-    depthAttachment = VkRenderingAttachmentInfo{.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO, .pNext = nullptr};
-    depthAttachment.imageView = context->get_depth_image().view;
-    depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.clearValue.depthStencil.depth = 0.f;
 }
 
 void Application::init_descriptors() {

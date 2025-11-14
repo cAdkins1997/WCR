@@ -1,10 +1,9 @@
 
 #include "device.h"
 
-
-Device::Device(std::string_view appName, const u32 _width, const u32 _height) : width(_width), height(_height)
+Device::Device(std::string_view appName, const u32 _width, const u32 _height)
 {
-    init_window();
+    init_window({_width, _height});
     init_instance();
     init_surface();
     select_gpu();
@@ -28,28 +27,47 @@ Device::~Device()
 
     destroy_swapchain();
 
-    vmaDestroyImage(allocator, drawImage.handle, drawImage.allocation);
-    vkDestroyImageView(handle, drawImage.view, nullptr);
+    vmaDestroyImage(allocator, m_DrawImage.handle, m_DrawImage.allocation);
+    vkDestroyImageView(handle, m_DrawImage.view, nullptr);
 
-    vmaDestroyImage(allocator, depthImage.handle, depthImage.allocation);
-    vkDestroyImageView(handle, depthImage.view, nullptr);
+    vmaDestroyImage(allocator, m_DepthImage.handle, m_DepthImage.allocation);
+    vkDestroyImageView(handle, m_DepthImage.view, nullptr);
 
     handle.destroyCommandPool(immediateInfo.immediateCommandPool, nullptr);
     handle.destroyFence(immediateInfo.immediateFence, nullptr);
 
-    instance.destroySurfaceKHR(surface, nullptr);
+    instance.destroySurfaceKHR(m_Surface, nullptr);
 
-    glfwDestroyWindow(window);
+    glfwDestroyWindow(m_Window);
+}
+
+vk::Extent2D Device::get_display_extent()
+{
+    u32 width {}, height {};
+    glfwGetFramebufferSize(m_Window, reinterpret_cast<int*>(&width), reinterpret_cast<int*>(&height));
+    m_DrawImage.extent = {width, height};
+    m_DepthImage.extent = {width, height};
+    return {width, height};
 }
 
 bool Device::recreate_swapchain() {
-    if (width <= 0 || height <= 0) return false;
+
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(m_Window, &width, &height);
+
+    if (width <= 0 || height <= 0)
+    {
+        while (width == 0 || height == 0) {
+            glfwGetFramebufferSize(m_Window, &width, &height);
+            glfwWaitEvents();
+        }
+    }
 
     handle.waitIdle();
 
     destroy_swapchain();
-
     init_swapchain();
+    recreate_draw_images();
 
     for (auto& cmd : commandBufferInfos)
         cmd.resizeRequested = false;
@@ -57,22 +75,24 @@ bool Device::recreate_swapchain() {
     return true;
 }
 
-void Device::init_window()
+void Device::recreate_draw_images()
 {
-    glfwInit();
+    destroy_draw_images();
+    destroy_depth_images();
+    init_draw_images();
+    init_depth_images();
+}
 
-    if (glfwVulkanSupported()) {
-        GLFWmonitor* monitor = glfwGetPrimaryMonitor();
-        const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-        glfwWindowHint(GLFW_RED_BITS, mode->redBits);
-        glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
-        glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
-        glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+void Device::init_window(const vk::Extent2D extent)
+{
+    if (glfwInit() != GLFW_TRUE)
+        throw std::runtime_error("Failed to initialize GLFW");
+    if (glfwVulkanSupported() != GLFW_TRUE)
+        throw std::runtime_error("Vulkan is not supported by your system");
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
-        window = glfwCreateWindow(width, height, applicationName.data(), nullptr, nullptr);
-    }
+    m_Window = glfwCreateWindow(extent.width, extent.height, applicationName.data(), nullptr, nullptr);
 }
 
 void Device::init_instance()
@@ -109,7 +129,7 @@ createInstance(&instanceCI, nullptr, &instance),
 
 void Device::init_surface()
 {
-    glfwCreateWindowSurface(instance, window, nullptr, reinterpret_cast<VkSurfaceKHR*>(&surface));
+    glfwCreateWindowSurface(instance, m_Window, nullptr, reinterpret_cast<VkSurfaceKHR*>(&m_Surface));
 }
 
 void Device::select_gpu()
@@ -129,21 +149,23 @@ void Device::select_gpu()
         "Failed to enumerate physical devices"
         );
 
-    for (const auto& candidate : gpus) {
-        if (gpu_is_suitable(candidate)) {
-            gpu = candidate;
-            break;
-        }
+    const auto result = std::ranges::find_if(gpus, [&](auto candidate)
+    {
+        return gpu_is_suitable(candidate);
+    });
+    if (result != gpus.end())
+    {
+        m_Gpu = *result;
     }
-
-    if (gpu == VK_NULL_HANDLE) {
+    else
+    {
         throw std::runtime_error("failed to find a suitable GPU");
     }
 }
 
 void Device::init_device()
 {
-    QueueFamilyIndices indices = find_queue_families(gpu);
+    QueueFamilyIndices indices = find_queue_families(m_Gpu);
 
     std::vector<vk::DeviceQueueCreateInfo> queueCIs;
     std::set uniqueQueueFamilies = {indices.graphicsFamily.value(), indices.presentFamily.value()};
@@ -158,7 +180,7 @@ void Device::init_device()
     }
 
     vk::PhysicalDeviceFeatures2 deviceFeatures;
-    deviceFeatures = gpu.getFeatures2();
+    deviceFeatures = m_Gpu.getFeatures2();
 
     vk::PhysicalDeviceVulkan11Features deviceVulkan11Features;
     deviceVulkan11Features.shaderDrawParameters = true;
@@ -200,7 +222,7 @@ void Device::init_device()
     deviceCI.enabledExtensionCount = static_cast<u32>(deviceExtensions.size());
     deviceCI.ppEnabledExtensionNames = deviceExtensions.data();
 
-    handle = gpu.createDevice(deviceCI, nullptr);
+    handle = m_Gpu.createDevice(deviceCI, nullptr);
 
     graphicsQueue = handle.getQueue(indices.graphicsFamily.value(), graphicsQueueIndex);
     computeQueue = handle.getQueue(indices.computeFamily.value(), computeQueueIndex);
@@ -210,19 +232,19 @@ void Device::init_device()
 
 void Device::init_swapchain()
 {
-    SwapChainSupportDetails support = query_swapchain_support(gpu);
+    auto [capabilities, formats, presentModes] = query_swapchain_support(m_Gpu);
 
-    vk::SurfaceFormatKHR surfaceFormat = choose_swap_surface_format(support.formats);
-    vk::PresentModeKHR presentMode = choose_swap_present_mode(support.presentModes);
-    vk::Extent2D extent = choose_swap_extent(support.capabilities);
+    vk::SurfaceFormatKHR surfaceFormat = choose_swap_surface_format(formats);
+    vk::PresentModeKHR presentMode = choose_swap_present_mode(presentModes);
+    vk::Extent2D extent = choose_swap_extent(capabilities, get_display_extent());
 
-    u32 imageCount = support.capabilities.minImageCount + 1;
-    if (support.capabilities.maxImageCount > 0 && imageCount > support.capabilities.maxImageCount) {
-        imageCount = support.capabilities.maxImageCount;
+    u32 imageCount = capabilities.minImageCount + 1;
+    if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount) {
+        imageCount = capabilities.maxImageCount;
     }
 
     vk::SwapchainCreateInfoKHR swapchainCI;
-    swapchainCI.surface = surface;
+    swapchainCI.surface = m_Surface;
     swapchainCI.minImageCount = imageCount;
     swapchainCI.imageFormat = surfaceFormat.format;
     swapchainCI.imageColorSpace = surfaceFormat.colorSpace;
@@ -230,7 +252,7 @@ void Device::init_swapchain()
     swapchainCI.imageArrayLayers = 1;
     swapchainCI.imageUsage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eColorAttachment;
 
-    QueueFamilyIndices indices = find_queue_families(gpu);
+    QueueFamilyIndices indices = find_queue_families(m_Gpu);
     u32 queueFamilyIndices[] = {indices.graphicsFamily.value(), indices.presentFamily.value(), indices.transferFamily.value(), indices.computeFamily.value()};
 
     if (indices.graphicsFamily != indices.presentFamily) {
@@ -242,18 +264,18 @@ void Device::init_swapchain()
         swapchainCI.imageSharingMode = vk::SharingMode::eExclusive;
     }
 
-    swapchainCI.preTransform = support.capabilities.currentTransform;
+    swapchainCI.preTransform = capabilities.currentTransform;
     swapchainCI.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
     swapchainCI.presentMode = presentMode;
     swapchainCI.clipped = vk::True;
 
     vk_check(
-        handle.createSwapchainKHR(&swapchainCI, nullptr, &swapchain),
+        handle.createSwapchainKHR(&swapchainCI, nullptr, &m_Swapchain),
         "Failed to create swapchain"
     );
 
     vk_check(
-        handle.getSwapchainImagesKHR(swapchain, &imageCount, nullptr),
+        handle.getSwapchainImagesKHR(m_Swapchain, &imageCount, nullptr),
         "Failed to get swapchain images"
     );
 
@@ -262,12 +284,12 @@ void Device::init_swapchain()
     swapchainImages.resize(imageCount);
 
     vk_check(
-    handle.getSwapchainImagesKHR(swapchain, &imageCount, swapchainImages.data()),
+    handle.getSwapchainImagesKHR(m_Swapchain, &imageCount, swapchainImages.data()),
 "Failed to get swapchain images"
     );
 
-    swapchainFormat = surfaceFormat.format;
-    swapchainExtent = extent;
+    m_SwapchainFormat = surfaceFormat.format;
+    m_SwapchainExtent = extent;
 
     std::vector<vk::Semaphore> acquiredSemaphores;
     acquiredSemaphores.resize(imageCount);
@@ -293,7 +315,7 @@ void Device::init_swapchain()
         vk::ImageViewCreateInfo imageViewCI;
         imageViewCI.image = swapchainImages[i];
         imageViewCI.viewType = vk::ImageViewType::e2D;
-        imageViewCI.format = swapchainFormat;
+        imageViewCI.format = m_SwapchainFormat;
         imageViewCI.components = {
             vk::ComponentSwizzle::eIdentity,
             vk::ComponentSwizzle::eIdentity,
@@ -388,7 +410,7 @@ void Device::init_allocator()
 
     VmaAllocatorCreateInfo allocatorInfo{};
     allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_4;
-    allocatorInfo.physicalDevice = gpu;
+    allocatorInfo.physicalDevice = m_Gpu;
     allocatorInfo.device = handle;
     allocatorInfo.instance = instance;
     allocatorInfo.pVulkanFunctions = &vulkanFunctions;
@@ -402,9 +424,9 @@ void Device::init_allocator()
 
 void Device::init_draw_images()
 {
-    const VkExtent3D drawImageExtent {width, height, 1};
-    drawImage.format = VK_FORMAT_R16G16B16A16_SFLOAT;
-    drawImage.extent = drawImageExtent;
+    const VkExtent3D drawImageExtent = to_extent_3D(get_display_extent());
+    m_DrawImage.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+    m_DrawImage.extent = drawImageExtent;
 
     VkImageUsageFlags drawImageUsages =
     VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
@@ -413,7 +435,7 @@ void Device::init_draw_images()
     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
     VkImageCreateInfo imageCI{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .pNext = nullptr};
-    imageCI.format = drawImage.format;
+    imageCI.format = m_DrawImage.format;
     imageCI.usage = drawImageUsages;
     imageCI.extent = drawImageExtent;
     imageCI.imageType = VK_IMAGE_TYPE_2D;
@@ -426,7 +448,7 @@ void Device::init_draw_images()
     imageAI.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     imageAI.requiredFlags = static_cast<VkMemoryPropertyFlags>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    vmaCreateImage(allocator, &imageCI, &imageAI, &drawImage.handle, &drawImage.allocation, nullptr);
+    vmaCreateImage(allocator, &imageCI, &imageAI, &m_DrawImage.handle, &m_DrawImage.allocation, nullptr);
 
     VkImageSubresourceRange subresourceRange;
     subresourceRange.baseMipLevel = 0;
@@ -436,24 +458,30 @@ void Device::init_draw_images()
     subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
     VkImageViewCreateInfo imageViewCI{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .pNext = nullptr};
-    imageViewCI.image = drawImage.handle;
+    imageViewCI.image = m_DrawImage.handle;
     imageViewCI.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    imageViewCI.format = drawImage.format;
+    imageViewCI.format = m_DrawImage.format;
     imageViewCI.subresourceRange = subresourceRange;
 
-    vkCreateImageView(handle, &imageViewCI, nullptr, &drawImage.view);
+    vkCreateImageView(handle, &imageViewCI, nullptr, &m_DrawImage.view);
+
+    drawAttachment = VkRenderingAttachmentInfo{.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO, .pNext = nullptr};
+    drawAttachment.imageView = m_DrawImage.view;
+    drawAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    drawAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    drawAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 }
 
 void Device::init_depth_images()
 {
-    const vk::Extent3D depthImageExtent = { width, height, 1};
-    depthImage.format = VK_FORMAT_D32_SFLOAT;
-    depthImage.extent = depthImageExtent;
+    const auto depthImageExtent = to_extent_3D(get_display_extent());
+    m_DepthImage.format = VK_FORMAT_D32_SFLOAT;
+    m_DepthImage.extent = depthImageExtent;
 
     constexpr VkImageUsageFlags depthImageUsages = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
     VkImageCreateInfo imageCI{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .pNext = nullptr};
-    imageCI.format = depthImage.format;
+    imageCI.format = m_DepthImage.format;
     imageCI.usage = depthImageUsages;
     imageCI.extent = depthImageExtent;
     imageCI.imageType = VK_IMAGE_TYPE_2D;
@@ -465,7 +493,7 @@ void Device::init_depth_images()
     allocationCI.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     allocationCI.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-    vmaCreateImage(allocator, &imageCI, &allocationCI, &depthImage.handle, &depthImage.allocation, nullptr);
+    vmaCreateImage(allocator, &imageCI, &allocationCI, &m_DepthImage.handle, &m_DepthImage.allocation, nullptr);
 
     VkImageSubresourceRange subresourceRange{};
     subresourceRange.baseMipLevel = 0;
@@ -475,12 +503,19 @@ void Device::init_depth_images()
     subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 
     VkImageViewCreateInfo imageViewCI{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .pNext = nullptr};
-    imageViewCI.image = depthImage.handle;
+    imageViewCI.image = m_DepthImage.handle;
     imageViewCI.viewType = VK_IMAGE_VIEW_TYPE_2D;
     imageViewCI.format = VK_FORMAT_D32_SFLOAT;
     imageViewCI.subresourceRange = subresourceRange;
 
-    vkCreateImageView(handle, &imageViewCI, nullptr, &depthImage.view);
+    vkCreateImageView(handle, &imageViewCI, nullptr, &m_DepthImage.view);
+
+    depthAttachment = VkRenderingAttachmentInfo{.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO, .pNext = nullptr};
+    depthAttachment.imageView = m_DepthImage.view;
+    depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depthAttachment.clearValue.depthStencil.depth = 0.f;
 }
 
 void Device::init_imgui() const {
@@ -518,10 +553,10 @@ void Device::init_imgui() const {
 
         ImGui::StyleColorsDark();
 
-        ImGui_ImplGlfw_InitForVulkan(window, true);
+        ImGui_ImplGlfw_InitForVulkan(m_Window, true);
         ImGui_ImplVulkan_InitInfo initInfo = {};
         initInfo.Instance = instance;
-        initInfo.PhysicalDevice = gpu;
+        initInfo.PhysicalDevice = m_Gpu;
         initInfo.Device = handle;
         initInfo.Queue = graphicsQueue;
         initInfo.DescriptorPool = imguiPool;
@@ -549,7 +584,7 @@ std::vector<const char*> Device::get_required_extensions()
     return extensions;
 }
 
-bool Device::gpu_is_suitable(vk::PhysicalDevice gpu)
+bool Device::gpu_is_suitable(const vk::PhysicalDevice gpu)
 {
     const QueueFamilyIndices indices = find_queue_families(gpu);
 
@@ -581,7 +616,7 @@ QueueFamilyIndices Device::find_queue_families(const vk::PhysicalDevice gpu) con
 
         vk::Bool32 presentSupport = false;
         vk_check(
-            gpu.getSurfaceSupportKHR(idx, surface, &presentSupport),
+            gpu.getSurfaceSupportKHR(idx, m_Surface, &presentSupport),
             "Failed to get GPU present support"
             );
 
@@ -628,34 +663,34 @@ SwapChainSupportDetails Device::query_swapchain_support(const vk::PhysicalDevice
     SwapChainSupportDetails details;
 
     vk_check(
-        gpu.getSurfaceCapabilitiesKHR(surface, &details.capabilities),
+        gpu.getSurfaceCapabilitiesKHR(m_Surface, &details.capabilities),
         "Failed to get surface capabillities"
         );
 
     u32 formatCount;
     vk_check(
-    gpu.getSurfaceFormatsKHR(surface, &formatCount, nullptr),
+    gpu.getSurfaceFormatsKHR(m_Surface, &formatCount, nullptr),
     "Failed to get GPU surface formats"
     );
 
     if (formatCount != 0) {
         details.formats.resize(formatCount);
         vk_check(
-        gpu.getSurfaceFormatsKHR(surface, &formatCount, details.formats.data()),
+        gpu.getSurfaceFormatsKHR(m_Surface, &formatCount, details.formats.data()),
 "Failed to get GPU surface formats"
         );
     }
 
     u32 presentModeCount;
     vk_check(
-    gpu.getSurfacePresentModesKHR(surface, &presentModeCount, nullptr),
+    gpu.getSurfacePresentModesKHR(m_Surface, &presentModeCount, nullptr),
     "Failed to get surface present modes"
     );
 
     if (presentModeCount != 0) {
         details.presentModes.resize(presentModeCount);
         vk_check(
-            gpu.getSurfacePresentModesKHR(surface, &presentModeCount, details.presentModes.data()),
+            gpu.getSurfacePresentModesKHR(m_Surface, &presentModeCount, details.presentModes.data()),
 "Failed to get surface present modes"
         );
     }
@@ -665,53 +700,56 @@ SwapChainSupportDetails Device::query_swapchain_support(const vk::PhysicalDevice
 
 vk::SurfaceFormatKHR Device::choose_swap_surface_format(const std::vector<vk::SurfaceFormatKHR>& availableFormats)
 {
-    for (const auto& format : availableFormats)
-        if (format.format == vk::Format::eB8G8R8A8Srgb && format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear)
-            return format;
-
-    return availableFormats[0];
+    const auto it = std::ranges::find_if(availableFormats, [](auto format)
+    {
+        return format.format == vk::Format::eB8G8R8A8Srgb && format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
+    });
+    return *it;
 }
 
 vk::PresentModeKHR Device::choose_swap_present_mode(const std::vector<vk::PresentModeKHR>& availablePresentModes)
 {
-    for (const auto& mode : availablePresentModes)
-        if (mode == vk::PresentModeKHR::eMailbox)
-            return mode;
+    if (const auto it = std::ranges::find(availablePresentModes, vk::PresentModeKHR::eMailbox); it != availablePresentModes.end())
+        return *it;
 
     return vk::PresentModeKHR::eFifo;
 }
 
-vk::Extent2D Device::choose_swap_extent(const vk::SurfaceCapabilitiesKHR& capabilities) const {
-    if (capabilities.currentExtent.width != std::numeric_limits<u32>::max()) return capabilities.currentExtent;
-    i32 width{}, height{};
-    glfwGetFramebufferSize(window, &width, &height);
+vk::Extent2D Device::choose_swap_extent(const vk::SurfaceCapabilitiesKHR& capabilities, const vk::Extent2D extent) const {
+    const auto u32Limit = std::numeric_limits<u32>::max();
+    if (capabilities.currentExtent.width < u32Limit && capabilities.currentExtent.height < u32Limit)
+        return capabilities.currentExtent;
 
-    vk::Extent2D actualExtent {
-        static_cast<u32>(width),
-        static_cast<u32>(height)
-    };
-
-    actualExtent.width = std::clamp(
-            actualExtent.width,
-            capabilities.minImageExtent.width,
-            capabilities.maxImageExtent.width
-    );
-
-    actualExtent.height = std::clamp(
-            actualExtent.height,
-            capabilities.minImageExtent.height,
-            capabilities.maxImageExtent.height
-    );
-
-    return actualExtent;
+    const auto width = std::clamp(
+        extent.width,
+        capabilities.minImageExtent.width,
+        capabilities.maxImageExtent.width
+        );
+    const auto height = std::clamp(
+        extent.height,
+        capabilities.minImageExtent.height,
+        capabilities.maxImageExtent.height
+        );
+    return { width, height };
 }
 
 void Device::destroy_swapchain() {
-    handle.destroySwapchainKHR(swapchain, nullptr);
+    handle.destroySwapchainKHR(m_Swapchain, nullptr);
 
     for (const auto&[swapchainImage, swapchainImageView, renderEndSemaphore] : swapchainImageData) {
         handle.destroyImageView(swapchainImageView, nullptr);
-        handle.destroyImage(swapchainImage, nullptr);
         handle.destroySemaphore(renderEndSemaphore, nullptr);
     }
+}
+
+void Device::destroy_draw_images() const
+{
+    vmaDestroyImage(allocator, m_DrawImage.handle, m_DrawImage.allocation);
+    vkDestroyImageView(handle, m_DrawImage.view, nullptr);
+}
+
+void Device::destroy_depth_images() const
+{
+    vmaDestroyImage(allocator, m_DepthImage.handle, m_DepthImage.allocation);
+    vkDestroyImageView(handle, m_DepthImage.view, nullptr);
 }

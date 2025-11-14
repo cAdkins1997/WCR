@@ -44,8 +44,6 @@ private:
     std::unique_ptr<SceneManager> sceneManager;
     SceneHandle testScene{};
     Pipeline opaquePipeline;
-    VkRenderingAttachmentInfo drawAttachment;
-    VkRenderingAttachmentInfo depthAttachment;
     ImGUIVariables imguiVariables;
 
 };

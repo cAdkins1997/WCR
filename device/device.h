@@ -84,18 +84,21 @@ public:
     [[nodiscard]] vk::Queue get_present_queue() const { return presentQueue; }
     [[nodiscard]] vk::Queue get_transferQueue() const { return transferQueue; }
     [[nodiscard]] VmaAllocator get_allocator() const { return allocator; }
-    [[nodiscard]] Image& get_draw_image() { return drawImage; }
-    [[nodiscard]] Image& get_depth_image() { return depthImage; }
-    [[nodiscard]] vk::Extent2D get_display_extent() const { return { width, height }; }
-    [[nodiscard]] vk::SwapchainKHR get_swapchain() const { return swapchain; }
-    [[nodiscard]] GLFWwindow* get_window_p() const { return window; }
+    [[nodiscard]] Image& get_draw_image() { return m_DrawImage; }
+    [[nodiscard]] Image& get_depth_image() { return m_DepthImage; }
+    [[nodiscard]] vk::Extent2D get_display_extent();
+    [[nodiscard]] vk::SwapchainKHR get_swapchain() const { return m_Swapchain; }
+    [[nodiscard]] GLFWwindow* get_window_p() const { return m_Window; }
     [[nodiscard]] ImmediateCommandInfo get_immediate_info() const { return immediateInfo; }
-    bool recreate_swapchain();
+    [[nodiscard]] VkRenderingAttachmentInfo get_draw_attachment() const { return drawAttachment; }
+    [[nodiscard]] VkRenderingAttachmentInfo get_depth_attachment() const { return depthAttachment; }
 
+    bool recreate_swapchain();
+    void recreate_draw_images();
     void init_imgui() const;
 
 private:
-    void init_window();
+    void init_window(vk::Extent2D extent);
     void init_instance();
     void init_surface();
     void select_gpu();
@@ -115,26 +118,29 @@ private:
     SwapChainSupportDetails query_swapchain_support(vk::PhysicalDevice gpu);
     vk::SurfaceFormatKHR choose_swap_surface_format(const std::vector<vk::SurfaceFormatKHR>& availableFormats);
     vk::PresentModeKHR choose_swap_present_mode(const std::vector<vk::PresentModeKHR>& availablePresentModes);
-    vk::Extent2D choose_swap_extent(const vk::SurfaceCapabilitiesKHR& capabilities) const;
+    [[nodiscard]] vk::Extent2D choose_swap_extent(const vk::SurfaceCapabilitiesKHR& capabilities, vk::Extent2D extent) const;
 
     void destroy_swapchain();
+    void destroy_draw_images() const;
+    void destroy_depth_images() const;
 
 private:
     std::string applicationName;
     std::vector<const char*> validationLayers {"VK_LAYER_KHRONOS_validation"};
     vk::Instance instance;
     vk::Device handle;
-    vk::PhysicalDevice gpu;
+    vk::PhysicalDevice m_Gpu;
 
-    u32 width{}, height{};
-    GLFWwindow* window = nullptr;
-    vk::SurfaceKHR surface;
-    vk::SwapchainKHR swapchain;
-    vk::Format swapchainFormat;
-    vk::Extent2D swapchainExtent;
+    GLFWwindow* m_Window = nullptr;
+    vk::SurfaceKHR m_Surface;
+    vk::SwapchainKHR m_Swapchain;
+    vk::Format m_SwapchainFormat;
+    vk::Extent2D m_SwapchainExtent;
 
-    Image drawImage;
-    Image depthImage;
+    Image m_DrawImage;
+    Image m_DepthImage;
+    VkRenderingAttachmentInfo drawAttachment;
+    VkRenderingAttachmentInfo depthAttachment;
 
     u32 graphicsQueueIndex{}, computeQueueIndex{}, presentQueueIndex{}, transferQueueIndex{};
     vk::Queue graphicsQueue, computeQueue, presentQueue, transferQueue;

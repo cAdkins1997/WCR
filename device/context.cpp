@@ -3,20 +3,21 @@
 
 #include "simdjson.h"
 
-Context::Context(std::string_view appName, u32 width, u32 height) : m_device(std::make_unique<Device>(appName, width, height))
+Context::Context(std::string_view appName, u32 width, u32 height) : m_Device(std::make_unique<Device>(appName, width, height))
 {
-    auto& infos = get_command_buffer_infos();
-    for (auto& info : infos) {
+    for (auto& infos = get_command_buffer_infos(); auto& info : infos) {
         info.SceneData = create_buffer(
-        sizeof(SceneData),
-        vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst,
-        VMA_MEMORY_USAGE_AUTO,
-        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-        VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT |
-        VMA_ALLOCATION_CREATE_MAPPED_BIT
+            sizeof(SceneData),
+            vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst,
+            VMA_MEMORY_USAGE_AUTO,
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT |
+            VMA_ALLOCATION_CREATE_MAPPED_BIT
         );
-        info.commandBuffer.set_allocator(m_device->get_allocator());
+        info.commandBuffer.set_allocator(m_Device->get_allocator());
     }
+
+    previousSwapchainExtent = get_display_extent();
 }
 
 Context::~Context()
@@ -26,13 +27,19 @@ Context::~Context()
 
 void Context::frame_submit(const std::function<void(FrameInFlight& cmd, SwapchainImageData& swapchainData)>&& func)
 {
-    auto deviceHandle = m_device->get_handle();
+    const auto deviceHandle = m_Device->get_handle();
+    if (auto currentExtent = get_display_extent(); currentExtent != previousSwapchainExtent)
+    {
+        m_Device->recreate_swapchain();
+    }
 
-    auto& fif = m_device->commandBufferInfos[frameNumber % MAX_FRAMES_IN_FLIGHT];
+    auto& fif = m_Device->commandBufferInfos[frameNumber % MAX_FRAMES_IN_FLIGHT];
 
     if (fif.resizeRequested) {
-        m_device->recreate_swapchain();
-        return;
+        if (!m_Device->recreate_swapchain())
+        {
+            throw std::runtime_error("Failed to recreate swapchain!");
+        }
     }
 
     vk_check(
@@ -40,7 +47,7 @@ void Context::frame_submit(const std::function<void(FrameInFlight& cmd, Swapchai
         "Failed to wait for fences!"
     );
 
-    auto swapchain = m_device->get_swapchain();
+    auto swapchain = m_Device->get_swapchain();
 
     auto result = deviceHandle.acquireNextImageKHR(swapchain, UINT32_MAX, fif.acquiredSemaphore, nullptr, &swapchainImageIndex);
     if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR)
@@ -49,7 +56,7 @@ void Context::frame_submit(const std::function<void(FrameInFlight& cmd, Swapchai
         return;
     }
 
-    auto swapchainData = m_device->swapchainImageData[swapchainImageIndex];
+    auto swapchainData = m_Device->swapchainImageData[swapchainImageIndex];
 
     vk_check(
         deviceHandle.resetFences(1, &fif.renderFence),
@@ -59,8 +66,7 @@ void Context::frame_submit(const std::function<void(FrameInFlight& cmd, Swapchai
     func(fif, swapchainData);
 
     const vk::PresentInfoKHR presentInfo(1, &swapchainData.renderEndSemaphore, 1, &swapchain, &swapchainImageIndex);
-    result = get_graphic_queue().presentKHR(presentInfo);
-    if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR)
+    if (result = get_graphic_queue().presentKHR(presentInfo); swapchain_need_recreation(result))
     {
         fif.resizeRequested = true;
         return;
@@ -88,7 +94,7 @@ Buffer Context::create_buffer(
     Buffer newBuffer{};
 
     vmaCreateBuffer(
-        m_device->get_allocator(),
+        m_Device->get_allocator(),
         reinterpret_cast<VkBufferCreateInfo*>(&bufferInfo),
         &vmaallocInfo,
         &newBuffer.handle,
@@ -98,7 +104,7 @@ Buffer Context::create_buffer(
 
     vk::BufferDeviceAddressInfo addressInfo{};
     addressInfo.buffer = newBuffer.handle;
-    newBuffer.deviceAddress = m_device->get_handle().getBufferAddress(addressInfo);
+    newBuffer.deviceAddress = m_Device->get_handle().getBufferAddress(addressInfo);
 
     return newBuffer;
 }
@@ -116,7 +122,7 @@ Buffer Context::create_staging_buffer(const u64 size) const {
     Buffer newBuffer{};
 
     vmaCreateBuffer(
-        m_device->get_allocator(),
+        m_Device->get_allocator(),
         &bufferInfo,
         &allocationCI,
         &newBuffer.handle,
@@ -156,7 +162,7 @@ Image Context::create_image(
     allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     allocInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-    vmaCreateImage(m_device->get_allocator(), &imageCI, &allocInfo, (VkImage*)&newImage.handle, &newImage.allocation, nullptr);
+    vmaCreateImage(m_Device->get_allocator(), &imageCI, &allocInfo, (VkImage*)&newImage.handle, &newImage.allocation, nullptr);
 
     VkImageAspectFlags aspectFlag = VK_IMAGE_ASPECT_COLOR_BIT;
     if (format == VK_FORMAT_D32_SFLOAT)
@@ -170,7 +176,7 @@ Image Context::create_image(
     viewInfo.subresourceRange.levelCount = imageCI.mipLevels;
     viewInfo.subresourceRange.layerCount = 1;
 
-    vkCreateImageView(m_device->get_handle(), &viewInfo, nullptr, &newImage.view);
+    vkCreateImageView(m_Device->get_handle(), &viewInfo, nullptr, &newImage.view);
 
     return newImage;
 }
@@ -184,7 +190,7 @@ Sampler Context::create_sampler(const vk::Filter minFilter, const vk::Filter mag
     vk::Sampler newSampler;
 
     vk_check(
-        m_device->get_handle().createSampler(&samplerCI, nullptr, &newSampler),
+        m_Device->get_handle().createSampler(&samplerCI, nullptr, &newSampler),
         "failed to create sampler"
         );
 
@@ -212,7 +218,7 @@ Shader Context::create_shader(std::string_view filePath) const
 
     vk::ShaderModule shaderModule;
     vk_check(
-        m_device->get_handle().createShaderModule(&shaderCI, nullptr, &shaderModule),
+        m_Device->get_handle().createShaderModule(&shaderCI, nullptr, &shaderModule),
         "Failed to create shader module"
         );
 
@@ -224,11 +230,11 @@ Shader Context::create_shader(std::string_view filePath) const
 }
 
 void Context::destroy_shader(const Shader &shader) const {
-    m_device->get_handle().destroy(shader.module);
+    m_Device->get_handle().destroy(shader.module);
 }
 
 void Context::init_imgui() const {
-    m_device->init_imgui();
+    m_Device->init_imgui();
 }
 
 void Context::submit_work(const CommandBuffer &cmd,
@@ -253,19 +259,20 @@ void Context::submit_work(const CommandBuffer &cmd,
         1, &commandBufferSI,
         1, &signalInfo);
 
-    const auto graphicsQueue = m_device->get_graphics_queue();
+    const auto graphicsQueue = m_Device->get_graphics_queue();
     vk_check(
         graphicsQueue.submit2(1, &submitInfo, renderFence),
         "Failed to submit graphics commands"
         );
 }
 
-void Context::submit_upload_work() {
-    const auto deviceHandle = m_device->get_handle();
-    const auto [immFence, immPool, immCmd] = m_device->get_immediate_info();
+void Context::submit_upload_work() const
+{
+    const auto deviceHandle = m_Device->get_handle();
+    const auto [immFence, immPool, immCmd] = m_Device->get_immediate_info();
     CommandBuffer cmd;
     cmd.set_handle(immCmd);
-    cmd.set_allocator(m_device->get_allocator());
+    cmd.set_allocator(m_Device->get_allocator());
 
     vk_check(deviceHandle.waitForFences(1, &immFence, true, UINT64_MAX), "Failed to wait for fences");
     vk_check(deviceHandle.resetFences(1, &immFence), "Failed to reset fences");
@@ -273,24 +280,24 @@ void Context::submit_upload_work() {
     vk::CommandBufferSubmitInfo commandBufferSI(cmd.get_handle());
     const vk::SubmitInfo2 submitInfo({}, nullptr, commandBufferSI);
 
-    const auto graphicsQueue = m_device->get_graphics_queue();
+    const auto graphicsQueue = m_Device->get_graphics_queue();
     vk_check(
         graphicsQueue.submit2(1, &submitInfo, immFence),
         "Failed to submit immediate upload commands"
         );
 
     vk_check(
-        m_device->get_handle().waitForFences(1, &immFence, true, UINT64_MAX),
+        m_Device->get_handle().waitForFences(1, &immFence, true, UINT64_MAX),
         "Failed to wait for fences"
         );
 }
 
 void Context::submit_immediate_work(std::function<void(CommandBuffer)> &&function) const {
-    const auto deviceHandle = m_device->get_handle();
-    const auto [immFence, immPool, immCmd] = m_device->get_immediate_info();
+    const auto deviceHandle = m_Device->get_handle();
+    const auto [immFence, immPool, immCmd] = m_Device->get_immediate_info();
     CommandBuffer cmd;
     cmd.set_handle(immCmd);
-    cmd.set_allocator(m_device->get_allocator());
+    cmd.set_allocator(m_Device->get_allocator());
 
     vk_check(deviceHandle.resetFences(1, &immFence), "Failed to reset fences");
 
@@ -302,7 +309,7 @@ void Context::submit_immediate_work(std::function<void(CommandBuffer)> &&functio
     vk::SubmitInfo2 submitInfo({}, nullptr, nullptr);
     submitInfo.pCommandBufferInfos = &commandBufferSI;
 
-    const auto graphicsQueue = m_device->get_graphics_queue();
+    const auto graphicsQueue = m_Device->get_graphics_queue();
     vk_check(
         graphicsQueue.submit2(1, &submitInfo, immFence),
         "Failed to submit immediate upload commands"
@@ -312,4 +319,15 @@ void Context::submit_immediate_work(std::function<void(CommandBuffer)> &&functio
         deviceHandle.waitForFences(1, &immFence, true, UINT64_MAX),
         "Failed to wait for fences"
         );
+}
+
+bool Context::swapchain_need_recreation(const vk::Result result)
+{
+    switch (result) {
+        case vk::Result::eSuccess:
+        case vk::Result::eSuboptimalKHR: return false;
+        case vk::Result::eErrorOutOfDateKHR: return true;
+        default: break;
+    }
+    throw std::runtime_error{"Fatal Swapchain Error"};
 }

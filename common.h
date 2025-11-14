@@ -21,3 +21,5 @@ typedef float f32;
 typedef double f64;
 
 void vk_check(vk::Result result, const char* outputMessage);
+
+inline vk::Extent3D to_extent_3D(const vk::Extent2D extent) { return vk::Extent3D{ extent.width, extent.height, 1}; }
