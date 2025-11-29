@@ -11,7 +11,8 @@ enum class MeshHandle : u32 { Invalid = 0 };
 enum class VertexBufferHandle : u32 { Invalid = 0 };
 enum class SceneHandle : u32 { Invalid = 0 };
 enum class NodeHandle : u32 { Invalid = 0 };
-enum class LightHandle : u32 { Invalid = 0 };
+enum class PointLightHandle : u32 { Invalid = 0 };
+enum class SpotLightHandle : u32 { Invalid = 0 };
 
 struct Buffer {
     VkBuffer handle;

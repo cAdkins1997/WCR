@@ -425,7 +425,7 @@ void Device::init_allocator()
 void Device::init_draw_images()
 {
     const VkExtent3D drawImageExtent = to_extent_3D(get_display_extent());
-    m_DrawImage.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+    m_DrawImage.format = VK_FORMAT_R8G8B8A8_SRGB;
     m_DrawImage.extent = drawImageExtent;
 
     VkImageUsageFlags drawImageUsages =

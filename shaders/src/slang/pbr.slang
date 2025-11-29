@@ -24,15 +24,16 @@ float4 pixelMain(VSOutput input) : SV_Target {
     float3 Lo = float3(0.0);
 
     for (uint i = 0; i < pushConstants.numLights; i++) {
-        Light currentLight = pushConstants.lights[i];
+        PointLight currentLight = pushConstants.pointLights[i];
         if (currentLight.intensity != 0.0) {
-            float3 lightDirection = normalize(currentLight.direction - fragPosition);
+            float3 lightDirection = normalize(currentLight.position - fragPosition);
             float3 halfway = normalize(view + lightDirection);
 
-            float distance = length(currentLight.direction - fragPosition);
+            float distance = length(currentLight.position - fragPosition);
 
             float attenuation = currentLight.intensity / ((distance * distance) + 0.000001);
-            float3 radiance = currentLight.colour * attenuation;
+            float windowing = pow(clamp(1 - pow((distance / currentLight.range), 4), 0, 1), 2);
+            float3 radiance = currentLight.colour * attenuation * windowing;
 
             float NDF = dTrowbridgeReitzGGX(normal, halfway, roughness);
             float G = GSmith(normal, view, lightDirection, roughness);
@@ -43,14 +44,45 @@ float4 pixelMain(VSOutput input) : SV_Target {
 
             float normalLightIncidence = max(dot(normal, lightDirection), 0.0);
             float3 numerator = NDF * G * F;
-            float denominator = 4.0 * max(dot(normal, view), 0.0) * normalLightIncidence + 0.0001;
+            float denominator = 4.0 * max(dot(normal, view), 0.0) * normalLightIncidence + 0.000001;
             float3 specular = numerator / denominator;
 
             Lo += ((kDiffuse * albedo / PI + specular) * radiance * normalLightIncidence);
         }
     }
 
-    float3 ambient = 0.0000001 * albedo;
+    for (uint i = 0; i < pushConstants.numLights; i++) {
+        SpotLight currentLight = pushConstants.spotLights[i];
+        if (currentLight.intensity != 0.0) {
+            float3 lightDirection = normalize(currentLight.position - fragPosition);
+            float distance = length(fragPosition - currentLight.position);
+            float normalLightIncidence = -dot(lightDirection, currentLight.direction);
+
+            float attenuation = currentLight.intensity / ((distance * distance) + 0.000001);
+            float windowing = pow(saturate(1 - pow((distance / currentLight.range), 4)), 2);
+            float fDirNumerator = normalLightIncidence - currentLight.umbraAngle;
+            float fDirDenominator = currentLight.penumbraAngle - currentLight.umbraAngle;
+            float fDir = pow(saturate(fDirNumerator / fDirDenominator), 2);
+
+            float3 halfway = normalize(view + lightDirection);
+            float NDF = dTrowbridgeReitzGGX(normal, halfway, roughness);
+            float G = GSmith(normal, view, lightDirection, roughness);
+            float3 F = fresnelSchlick(max(dot(halfway, view), 0.0), F0);
+
+            float3 kSpecular = F;
+            float3 kDiffuse = float3(1.0) - kSpecular;
+
+            float3 numerator = NDF * G * F;
+            float denominator = 4.0 * max(dot(normal, view), 0.0) * normalLightIncidence + 0.0001;
+            float3 specular = numerator / denominator;
+
+            float3 radiance = currentLight.colour * attenuation * windowing * fDir;
+
+            Lo += ((kDiffuse * albedo / PI + specular) * radiance);
+        }
+    }
+
+    float3 ambient = 0.00001f * albedo;
     color = ambient + Lo;
 
     color = color / (color + float3(1.0));
@@ -58,6 +90,8 @@ float4 pixelMain(VSOutput input) : SV_Target {
 
     return float4(color, 1.0);
 }
+
+
 
 float dTrowbridgeReitzGGX(float3 normal, float3 halfway, float roughness) {
     float numerator = roughness * roughness;

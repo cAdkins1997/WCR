@@ -27,6 +27,13 @@ typedef ktx_int16_t ki16;
 typedef glm::vec4 Plane;
 typedef std::array<Plane, 5> Frustum;
 
+static constexpr u32 MAX_POINT_LIGHTS = 250;
+static constexpr u32 MAX_SPOT_LIGHTS = 250;
+static constexpr u32 CLUSTER_Z_BINS = 16;
+static constexpr u32 CLUSTER_SIZE = 8;
+static constexpr u64 WORDS_PER_TILE_COUNT_POINTS = (MAX_POINT_LIGHTS + 31) / 32;
+static constexpr u64 WORDS_PER_TILE_COUNT_SPOTS = (MAX_SPOT_LIGHTS + 31) / 32;
+
 struct AABB {
     glm::vec3 min{};
     glm::vec3 max{};
@@ -99,13 +106,22 @@ enum class LightType : u8 {
     Directional, Point, Spot
 };
 
-struct Light {
+struct PointLight
+{
     glm::vec3 position{};
     glm::vec3 colour{};
     f32 intensity{};
     f32 range{};
-    f32 innerAngle{};
-    f32 outerAngle{};
+};
+
+struct SpotLight {
+    glm::vec3 position{};
+    glm::vec3 direction{};
+    glm::vec3 colour{};
+    f32 intensity{};
+    f32 umbraAngle{};
+    f32 penumbraAngle{};
+    f32 range{};
 };
 
 class SceneManager;
@@ -131,9 +147,11 @@ struct PushConstants {
     glm::mat4 renderMatrix;
     vk::DeviceAddress vertexBuffer;
     vk::DeviceAddress materialBuffer;
-    vk::DeviceAddress lightBuffer;
+    vk::DeviceAddress spotLightBuffer;
+    vk::DeviceAddress pointLightBuffer;
     u32 materialIndex;
-    u32 numLights;
+    u32 numPointLights;
+    u32 numSpotLights;
 };
 
 
@@ -147,7 +165,8 @@ struct Scene {
     std::vector<MaterialHandle> materials;
     std::vector<SamplerHandle> samplers;
     std::vector<TextureHandle> textures;
-    std::vector<LightHandle> lights;
+    std::vector<PointLightHandle> pointLights;
+    std::vector<SpotLightHandle> spotLights;
 };
 
 struct ktxTextureData {
@@ -169,14 +188,16 @@ struct ResourceData {
     std::vector<u16> texturesMetadata;
     std::vector<Sampler> samplers;
     std::vector<u16> samplerMetadata;
-    std::vector<Light> lights;
-    std::vector<u16> lightMetadata;
+    std::vector<SpotLight> spotLights;
+    std::vector<u16> spotLightMetadata;
+    std::vector<PointLight> pointLights;
+    std::vector<u16> pointLightMetaData;
 
-    std::string lightNames;
     Buffer vertexBuffer;
     Buffer indexBuffer;
     Buffer materialBuffer;
-    Buffer lightBuffer;
+    Buffer pointLightBuffer;
+    Buffer spotLightBuffer;
 };
 
 class SceneManager {
@@ -194,16 +215,28 @@ public:
 
     [[nodiscard]] Scene& get_scene(SceneHandle handle) const;
     [[nodiscard]] Node& get_node(NodeHandle handle) const;
-    [[nodiscard]] Light& get_light(LightHandle handle) const;
+    [[nodiscard]] SpotLight& get_spot_light(SpotLightHandle handle) const;
+    [[nodiscard]] PointLight& get_point_light(PointLightHandle handle) const;
     [[nodiscard]] Material& get_material(MaterialHandle handle) const;
     [[nodiscard]] Mesh& get_mesh(MeshHandle handle) const;
     [[nodiscard]] Image& get_texture(TextureHandle handle) const;
     [[nodiscard]] Sampler& get_sampler(SamplerHandle handle) const;
-    [[nodiscard]] Light* get_all_lights_p() const { return m_resourceData->lights.data(); }
-    [[nodiscard]] std::string& get_light_names() const { return m_resourceData->lightNames; }
-    [[nodiscard]] u64 get_num_lights() const { return m_resourceData->lights.size(); }
+    [[nodiscard]] SpotLight* get_all_spot_lights_p() const { return m_resourceData->spotLights.data(); }
+    [[nodiscard]] PointLight* get_all_point_lights_p() const { return m_resourceData->pointLights.data(); }\
+    [[nodiscard]] u64 get_num_lights() const { return m_resourceData->pointLights.size() + m_resourceData->spotLights.size(); }
+    [[nodiscard]] u64 get_num_point_lights() const { return m_resourceData->pointLights.size(); }
+    [[nodiscard]] u64 get_num_spot_lights() const { return m_resourceData->spotLights.size(); }
 
     void update_light_buffer(const CommandBuffer& cmd) const;
+    PointLightHandle add_point_light(const PointLight& light) const;
+    SpotLightHandle add_spot_light(const SpotLight& light) const;
+
+    void remove_point_light(PointLightHandle handle) const;
+    void remove_point_light(u32 index) const;
+
+    void remove_spot_light(SpotLightHandle handle) const;
+    void remove_spot_light(u32 index) const;
+
     void update_nodes(const glm::mat4& rootMatrix, SceneHandle handle);
     void release_gpu_resources(const Context& context) const;
 
@@ -215,7 +248,8 @@ private:
 
     void assert_handle(SceneHandle handle) const;
     void assert_handle(NodeHandle handle) const;
-    void assert_handle(LightHandle handle) const;
+    void assert_handle(SpotLightHandle handle) const;
+    void assert_handle(PointLightHandle handle) const;
     void assert_handle(MaterialHandle handle) const;
     void assert_handle(MeshHandle handle) const;
     void assert_handle(TextureHandle handle) const;
@@ -262,7 +296,8 @@ private:
     [[nodiscard]] Buffer prep_vertex_index_staging(const GeometricData& geoData) const;
     [[nodiscard]] Buffer prepare_image_staging(const ktxTextureData& textureData) const;
     [[nodiscard]] Buffer prepare_material_buffer() const;
-    [[nodiscard]] Buffer prepare_light_buffer() const;
+    [[nodiscard]] Buffer prepare_point_light_buffer() const;
+    [[nodiscard]] Buffer prepare_spot_light_buffer() const;
 
     [[nodiscard]] u16 get_metadata_at_index(u32 index) const;
 

@@ -160,25 +160,9 @@ void Application::draw_imgui(const CommandBuffer &cmd, const vk::ImageView view,
     ImGui::Begin("Scene Settings");
 
     ImGui::BeginChild("Light Settings");
-    ImGui::Text("Light Settings");
 
-    const auto label = "Lights";
-    ImGui::Combo(label, &imguiVariables.selectedLight, imguiVariables.lightNames, imguiVariables.numLights);
-    Light* currentLight = &imguiVariables.lights[imguiVariables.selectedLight];
-
-    if (ImGui::InputFloat3("Position", reinterpret_cast<f32*>(&currentLight->position)))
-        imguiVariables.lightsDirty = true;
-
-    if (ImGui::ColorPicker3("Colour", reinterpret_cast<f32*>(&currentLight->colour), ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_Float))
-        imguiVariables.lightsDirty = true;
-
-    if (ImGui::DragFloat("Intensity", &currentLight->intensity, 0.001f, 0.0f, 1.0f))
-        imguiVariables.lightsDirty = true;
-
-    if (imguiVariables.lightsDirty) {
-        sceneManager->update_light_buffer(cmd);
-        imguiVariables.lightsDirty = false;
-    }
+    imgui_point_lights(cmd);
+    imgui_spot_lights(cmd);
 
     ImGui::EndChild();
     ImGui::End();
@@ -199,10 +183,142 @@ void Application::draw_imgui(const CommandBuffer &cmd, const vk::ImageView view,
     renderInfo.layerCount = 1;
     renderInfo.viewMask = 0;
 
-    auto cmdHandle = cmd.get_handle();
+    const auto cmdHandle = cmd.get_handle();
     vkCmdBeginRendering(cmdHandle, &renderInfo);
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdHandle);
     vkCmdEndRendering(cmdHandle);
+}
+
+void Application::imgui_point_lights(const CommandBuffer& cmd)
+{
+    ImGui::BeginChild("Point Lights");
+    ImGui::Text("Point Lights");
+    if (ImGui::Button("Create Point Light"))
+    {
+        constexpr PointLight newPointLight {{0.0f, 2.0f, 0.0f},{0.3f, 5.0f, 2.0f}, 0.5f, 3.0f};
+        sceneManager->add_point_light(newPointLight);
+        imguiVariables.numPointLights = sceneManager->get_num_point_lights();
+        imguiVariables.lightsDirty = true;
+        imguiVariables.selectedPointLight = imguiVariables.numPointLights - 1;
+    }
+    if (ImGui::Button("Destroy Point Light"))
+    {
+        if (imguiVariables.numPointLights > 0)
+        {
+            sceneManager->remove_point_light(imguiVariables.selectedPointLight);
+            imguiVariables.numPointLights = sceneManager->get_num_point_lights();
+            imguiVariables.lightsDirty = true;
+            if (imguiVariables.selectedPointLight > 0)
+            {
+                imguiVariables.selectedPointLight--;
+            }
+        }
+    }
+
+    if (ImGui::BeginCombo("Selected Point Light", std::to_string(imguiVariables.selectedPointLight).c_str(), ImGuiComboFlags_HeightLargest))
+    {
+        for (u64 i = 0; i < imguiVariables.numPointLights; ++i)
+        {
+            if (ImGui::Selectable(std::to_string(i).c_str()))
+            {
+                imguiVariables.selectedPointLight = i;
+                imguiVariables.lightsDirty = true;
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    PointLight* currentPointLight = &imguiVariables.pointLights[imguiVariables.selectedPointLight];
+
+    if (ImGui::InputFloat3("Position", reinterpret_cast<f32*>(&currentPointLight->position)))
+        imguiVariables.lightsDirty = true;
+
+    if (ImGui::ColorPicker3("Colour", reinterpret_cast<f32*>(&currentPointLight->colour), ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_Float))
+        imguiVariables.lightsDirty = true;
+
+    if (ImGui::DragFloat("Intensity", &currentPointLight->intensity, 0.001f, 0.0f, 1.0f))
+        imguiVariables.lightsDirty = true;
+
+    if (ImGui::DragFloat("Range", &currentPointLight->range, 0.1f, 0.0f, 100.0f))
+        imguiVariables.lightsDirty = true;
+
+    if (imguiVariables.lightsDirty) {
+        sceneManager->update_light_buffer(cmd);
+        imguiVariables.lightsDirty = false;
+    }
+
+    ImGui::EndChild();
+}
+
+void Application::imgui_spot_lights(const CommandBuffer& cmd)
+{
+    ImGui::BeginChild("Spot Lights");
+    ImGui::Text("Spot Lights");
+
+    if (ImGui::Button("Create Point Light"))
+    {
+        constexpr SpotLight newPointLight {{ 0.0f, 3.0f, 0.0f },{ 0.0f, -1.0f, 0.0f }, {0.3f, 5.0f, 2.0f}, 0.5f, 1.0f, 0.1f};
+        sceneManager->add_spot_light(newPointLight);
+        imguiVariables.numPointLights = sceneManager->get_num_point_lights();
+        imguiVariables.lightsDirty = true;
+        imguiVariables.selectedPointLight = imguiVariables.numPointLights - 1;
+    }
+    if (ImGui::Button("Destroy Point Light"))
+    {
+        if (imguiVariables.numPointLights > 0)
+        {
+            sceneManager->remove_point_light(imguiVariables.selectedPointLight);
+            imguiVariables.numPointLights = sceneManager->get_num_point_lights();
+            imguiVariables.lightsDirty = true;
+            if (imguiVariables.selectedPointLight > 0)
+            {
+                imguiVariables.selectedPointLight--;
+            }
+        }
+    }
+
+    if (ImGui::BeginCombo("Selected Spot Light", "Choose a light", ImGuiComboFlags_HeightLargest))
+    {
+        for (u64 i = 0; i < imguiVariables.numSpotLights; ++i)
+        {
+            if (ImGui::Selectable(std::to_string(i).c_str()))
+            {
+                imguiVariables.selectedSpotLight = i;
+                imguiVariables.lightsDirty = true;
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    SpotLight* currentSpotLight = &imguiVariables.spotLights[imguiVariables.selectedSpotLight];
+
+    if (ImGui::InputFloat3("Position", reinterpret_cast<f32*>(&currentSpotLight->position)))
+        imguiVariables.lightsDirty = true;
+
+    if (ImGui::DragFloat3("Direction", reinterpret_cast<f32*>(&currentSpotLight->direction), 0.1f, -360.0f, 360.0f))
+        imguiVariables.lightsDirty = true;
+
+    if (ImGui::ColorPicker3("Colour", reinterpret_cast<f32*>(&currentSpotLight->colour), ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_Float))
+        imguiVariables.lightsDirty = true;
+
+    if (ImGui::DragFloat("Intensity", &currentSpotLight->intensity, 0.001f, 0.0f, 1.0f))
+        imguiVariables.lightsDirty = true;
+
+    if (ImGui::DragFloat("Range", &currentSpotLight->range, 0.1f, 0.0f, 10.0f))
+        imguiVariables.lightsDirty = true;
+
+    if (ImGui::InputFloat("Penumbra Angle", &currentSpotLight->penumbraAngle))
+        imguiVariables.lightsDirty = true;
+
+    if (ImGui::InputFloat("Umbra Angle", &currentSpotLight->umbraAngle))
+        imguiVariables.lightsDirty = true;
+
+    if (imguiVariables.lightsDirty) {
+        sceneManager->update_light_buffer(cmd);
+        imguiVariables.lightsDirty = false;
+    }
+
+    ImGui::EndChild();
 }
 
 void Application::run()
@@ -278,7 +394,8 @@ void Application::init_scene_data() {
 }
 
 void Application::init_gui_data() {
-    imguiVariables.lights = sceneManager->get_all_lights_p();
-    imguiVariables.lightNames = sceneManager->get_light_names().data();
-    i32 numLights = sceneManager->get_num_lights();
+    imguiVariables.pointLights = sceneManager->get_all_point_lights_p();
+    imguiVariables.spotLights = sceneManager->get_all_spot_lights_p();
+    imguiVariables.numPointLights = static_cast<i32>(sceneManager->get_num_point_lights());
+    imguiVariables.numSpotLights = static_cast<i32>(sceneManager->get_num_spot_lights());
 }

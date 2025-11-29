@@ -25,21 +25,29 @@ public struct Material {
     public uint emissiveTexture;
 };
 
-
-public struct Light {
-    public float3 direction;
+public struct PointLight {
+    public float3 position;
     public float3 colour;
     public float intensity;
     public float range;
-    public float innerAngle;
-    public float outerAngle;
 };
+
+public struct SpotLight {
+    public float3 position;
+    public float3 direction;
+    public float3 colour;
+    public float intensity;
+    public float umbraAngle;
+    public float penumbraAngle;
+    public float range;
+}
 
 public struct PushConstants {
     public float4x4 renderMatrix;
     public ConstBufferPointer<Vertex> vertices;
     public ConstBufferPointer<Material> materials;
-    public ConstBufferPointer<Light> lights;
+    public ConstBufferPointer<SpotLight> spotLights;
+    public ConstBufferPointer<PointLight> pointLights;
     public uint materialIndex;
     public uint numLights;
 };

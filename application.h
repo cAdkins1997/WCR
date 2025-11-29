@@ -14,10 +14,12 @@ void process_input(GLFWwindow* window, f32 deltaTime, bool& mouseLook);
 inline auto camera = Camera(glm::vec3(0.0f, 10.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), -90.0f, 0.0f);
 
 struct ImGUIVariables {
-    i32 selectedLight = 0;
-    i32 numLights = 0;
-    Light* lights;
-    char* lightNames = nullptr;
+    i32 selectedPointLight = 0;
+    i32 selectedSpotLight = 0;
+    i32 numPointLights = 0;
+    i32 numSpotLights = 0;
+    PointLight* pointLights = nullptr;
+    SpotLight* spotLights = nullptr;
     bool lightsDirty = false;
 };
 
@@ -28,6 +30,8 @@ public:
 
     void draw();
     void draw_imgui(const CommandBuffer& cmd, vk::ImageView view, vk::Extent2D extent);
+    void imgui_point_lights(const CommandBuffer& cmd);
+    void imgui_spot_lights(const CommandBuffer& cmd);
     void run();
     void update();
     void init();

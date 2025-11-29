@@ -13,10 +13,18 @@ Node& SceneManager::get_node(const NodeHandle handle) const {
     return m_resourceData->nodes[index];
 }
 
-Light& SceneManager::get_light(const LightHandle handle) const {
+SpotLight& SceneManager::get_spot_light(SpotLightHandle handle) const
+{
     assert_handle(handle);
     const u32 index = get_handle_index(handle);
-    return m_resourceData->lights[index];
+    return m_resourceData->spotLights[index];
+}
+
+PointLight& SceneManager::get_point_light(PointLightHandle handle) const
+{
+    assert_handle(handle);
+    const u32 index = get_handle_index(handle);
+    return m_resourceData->pointLights[index];
 }
 
 Material& SceneManager::get_material(const MaterialHandle handle) const {
@@ -59,12 +67,20 @@ void SceneManager::assert_handle(const NodeHandle handle) const {
     assert(m_resourceData->nodeMetadata[index] == metaData && "Handle metadata does not match an existing node");
 }
 
-void SceneManager::assert_handle(const LightHandle handle) const {
+void SceneManager::assert_handle(const SpotLightHandle handle) const {
     const u32 metaData = get_handle_metadata(handle);
     const u32 index = get_handle_index(handle);
 
-    assert(index <= m_resourceData->lights.size() && "Handle out of bounds");
-    assert(m_resourceData->lightMetadata[index] == metaData && "Handle metadata does not match an existing light");
+    assert(index <= m_resourceData->spotLights.size() && "Handle out of bounds");
+    assert(m_resourceData->spotLightMetadata[index] == metaData && "Handle metadata does not match an existing light");
+}
+
+void SceneManager::assert_handle(const PointLightHandle handle) const {
+    const u32 metaData = get_handle_metadata(handle);
+    const u32 index = get_handle_index(handle);
+
+    assert(index <= m_resourceData->pointLights.size() && "Handle out of bounds");
+    assert(m_resourceData->pointLightMetaData[index] == metaData && "Handle metadata does not match an existing light");
 }
 
 void SceneManager::assert_handle(const MaterialHandle handle) const {
@@ -102,8 +118,10 @@ void SceneManager::assert_handle(const SamplerHandle handle) const {
 void SceneManager::draw_scene(const CommandBuffer &cmd, const SceneHandle handle, const glm::mat4 &viewProjectionMatrix) {
     pc.vertexBuffer = m_resourceData->vertexBuffer.deviceAddress;
     pc.materialBuffer = m_resourceData->materialBuffer.deviceAddress;
-    pc.lightBuffer = m_resourceData->lightBuffer.deviceAddress;
-    pc.numLights = static_cast<u32>(m_resourceData->lights.size());
+    pc.pointLightBuffer = m_resourceData->pointLightBuffer.deviceAddress;
+    pc.spotLightBuffer = m_resourceData->spotLightBuffer.deviceAddress;
+    pc.numPointLights = static_cast<u32>(get_num_point_lights());
+    pc.numSpotLights = static_cast<u32>(get_num_spot_lights());
 
     const auto scene = get_scene(handle);
     cmd.bind_index_buffer(m_resourceData->indexBuffer);
@@ -150,16 +168,87 @@ void SceneManager::cpu_frustum_culling(const Scene& scene, const glm::mat4 &view
 }
 
 void SceneManager::update_light_buffer(const CommandBuffer& cmd) const {
-    const auto lights = m_resourceData->lights;
-    const u32 lightBufferSize = lights.size() * sizeof(Light);
-    const auto lightBuffer = m_resourceData->lightBuffer;
-    if (!m_resourceData->lights.empty()) {
-        auto* lightData = static_cast<Light*>(lightBuffer.p_get_mapped_data());
-        for (u32 i = 0; i < lights.size(); i++)
-            lightData[i] = lights[i];
+    const auto& pointLights = m_resourceData->pointLights;
+    const auto& spotLights = m_resourceData->spotLights;
+    const auto pointLightBuffer = m_resourceData->pointLightBuffer;
+    const auto spotLightBuffer = m_resourceData->spotLightBuffer;
 
-        cmd.update_uniform(lightData, lightBufferSize, lightBuffer);
+    if (!pointLights.empty())
+    {
+        auto* pointLightData = static_cast<PointLight*>(pointLightBuffer.p_get_mapped_data());
+        for (u64 i = 0; i < pointLights.size(); i++)
+            pointLightData[i] = pointLights[i];
+
+        constexpr u64 pointLightBufferSize = MAX_POINT_LIGHTS * sizeof(PointLight);
+        cmd.update_uniform(pointLightData, pointLightBufferSize, pointLightBuffer);
     }
+    else
+    {
+        constexpr PointLight pointLight{};
+        cmd.update_uniform(&pointLight, sizeof(PointLight), pointLightBuffer);
+    }
+    if (!spotLights.empty())
+    {
+        auto* spotLightData = static_cast<SpotLight*>(spotLightBuffer.p_get_mapped_data());
+        for (u64 i = 0; i < spotLights.size(); i++)
+            spotLightData[i] = spotLights[i];
+
+        constexpr u64 spotLightBufferSize = MAX_SPOT_LIGHTS * sizeof(SpotLight);
+        cmd.update_uniform(spotLightData, spotLightBufferSize, spotLightBuffer);
+    }
+    else
+    {
+        constexpr SpotLight spotLight{};
+        cmd.update_uniform(&spotLight, sizeof(SpotLight), spotLightBuffer);
+    }
+}
+
+PointLightHandle SceneManager::add_point_light(const PointLight& light) const
+{
+    auto& pointLights = m_resourceData->pointLights;
+    pointLights.push_back(light);
+    return static_cast<PointLightHandle>(pointLights.size() << 16 | pointLights.size());
+}
+
+SpotLightHandle SceneManager::add_spot_light(const SpotLight& light) const
+{
+    auto& spotLights = m_resourceData->spotLights;
+    spotLights.push_back(light);
+    return static_cast<SpotLightHandle>(spotLights.size() << 16 | spotLights.size());
+}
+
+void SceneManager::remove_point_light(const PointLightHandle handle) const
+{
+    auto& pointLights = m_resourceData->pointLights;
+    auto pointLight = get_point_light(handle);
+    std::swap(pointLight, *pointLights.end());
+    pointLights.pop_back();
+}
+
+void SceneManager::remove_point_light(const u32 index) const
+{
+    assert(index < static_cast<u32>(m_resourceData->pointLights.size()) && "Tried to remove spot light out of bounds");
+    auto& pointLights = m_resourceData->pointLights;
+    auto& pointLight = pointLights[index];
+    std::swap(pointLight, *pointLights.end());
+    pointLights.pop_back();
+}
+
+void SceneManager::remove_spot_light(const SpotLightHandle handle) const
+{
+    auto& spotLights = m_resourceData->spotLights;
+    auto spotLight = get_spot_light(handle);
+    std::swap(spotLight, *spotLights.end());
+    spotLights.pop_back();
+}
+
+void SceneManager::remove_spot_light(const u32 index) const
+{
+    assert(index < static_cast<u32>(m_resourceData->spotLights.size()) && "Tried to remove spot light out of bounds");
+    auto& spotLights = m_resourceData->pointLights;
+    auto& spotLight = spotLights[index];
+    std::swap(spotLight, *spotLights.end());
+    spotLights.pop_back();
 }
 
 void SceneManager::update_nodes(const glm::mat4 &rootMatrix, const SceneHandle handle) {
@@ -173,7 +262,9 @@ void SceneManager::release_gpu_resources(const Context& context) const {
     auto allocator = context.get_allocator();
     auto deviceHandle = context.get_device_handle();
 
-    vmaDestroyBuffer(allocator, m_resourceData->lightBuffer.handle, m_resourceData->lightBuffer.allocation);
+    vmaDestroyBuffer(allocator, m_resourceData->pointLightBuffer.handle, m_resourceData->pointLightBuffer.allocation);
+    vmaDestroyBuffer(allocator, m_resourceData->spotLightBuffer.handle, m_resourceData->spotLightBuffer.allocation);
+
     vmaDestroyBuffer(allocator, m_resourceData->materialBuffer.handle, m_resourceData->materialBuffer.allocation);
 
     vmaDestroyBuffer(allocator, m_resourceData->vertexBuffer.handle, m_resourceData->vertexBuffer.allocation);
@@ -592,32 +683,49 @@ void SceneBuilder::create_samplers(const fastgltf::Asset& asset, Scene& scene) c
 }
 
 void SceneBuilder::create_lights(const fastgltf::Asset &asset, Scene &scene) const {
-    auto& lights = m_resourceData->lights;
-    auto& lightMetadata = m_resourceData->samplerMetadata;
-    const auto numGltfLights = lights.size();
-    lights.reserve(numGltfLights + lights.size());
+    auto& pointLights = m_resourceData->pointLights;
+    auto& pointLightMetadata = m_resourceData->pointLightMetaData;
+
+    auto& spotLights = m_resourceData->spotLights;
+    auto& spotLightMetadata = m_resourceData->spotLightMetadata;
+
+    spotLights.reserve(MAX_SPOT_LIGHTS);
+    pointLights.reserve(MAX_POINT_LIGHTS);
 
     for (const auto& gltfLight : asset.lights) {
-        Light light;
-        u16 metaData = lightMetadata.size();
 
-        m_resourceData->lightNames.append(std::to_string(lights.size()) + '\0');
+        if (gltfLight.type == fastgltf::LightType::Point)
+        {
+            PointLight pointLight{};
+            pointLight.colour = {gltfLight.color.x(), gltfLight.color.y(), gltfLight.color.z()};
+            pointLight.intensity = gltfLight.intensity;
+            if (gltfLight.range.has_value())
+                pointLight.range = gltfLight.range.value();
 
-        light.colour = {gltfLight.color.x(), gltfLight.color.y(), gltfLight.color.z()};
-        light.intensity = gltfLight.intensity;
+            u16 metaData = pointLightMetadata.size();
+            pointLightMetadata.push_back(metaData);
+            pointLights.push_back(pointLight);
 
-        if (gltfLight.range.has_value())
-            light.range = gltfLight.range.value();
-        if (gltfLight.innerConeAngle.has_value())
-            light.innerAngle = gltfLight.innerConeAngle.value();
-        if (gltfLight.outerConeAngle.has_value())
-            light.outerAngle = gltfLight.outerConeAngle.value();
+            const auto handle = static_cast<PointLightHandle>(pointLights.size() << 16 | pointLights.size());
+            scene.pointLights.push_back(handle);
+        }
+        if (gltfLight.type == fastgltf::LightType::Spot)
+        {
+            SpotLight spotLight{};
+            spotLight.colour = {gltfLight.color.x(), gltfLight.color.y(), gltfLight.color.z()};
+            spotLight.intensity = gltfLight.intensity;
+            if (gltfLight.outerConeAngle.has_value())
+                spotLight.umbraAngle = gltfLight.outerConeAngle.value();
+            if (gltfLight.innerConeAngle.has_value())
+                spotLight.penumbraAngle = gltfLight.innerConeAngle.value();
 
-        lights.push_back(light);
-        lightMetadata.push_back(metaData);
+            u16 metaData = pointLightMetadata.size();
+            spotLightMetadata.push_back(metaData);
+            spotLights.push_back(spotLight);
 
-        const auto handle = static_cast<LightHandle>(lights.size() << 16 | lights.size());
-        scene.lights.push_back(handle);
+            const auto handle = static_cast<SpotLightHandle>(spotLights.size() << 16 | spotLights.size());
+            scene.spotLights.push_back(handle);
+        }
     }
 }
 
@@ -788,11 +896,13 @@ void SceneBuilder::upload_scene_data(const GeometricData& geoData, ktxTextureDat
     const auto geoStaging = prep_vertex_index_staging(geoData);
     const auto imageStaging = prepare_image_staging(ktxTextureData);
     const auto materialBuffer = prepare_material_buffer();
-    const auto lightBuffer = prepare_light_buffer();
+    const auto pointLightBuffer = prepare_point_light_buffer();
+    const auto spotLightBuffer = prepare_spot_light_buffer();
 
     const auto& [vertexBuffer, indexBuffer, vertexBufferSize, indexBufferSize] = prep_geo_buffers(geoData);
 
-    auto& lights = m_resourceData->lights;
+    auto& pointLights = m_resourceData->pointLights;
+    auto& spotLights = m_resourceData->spotLights;
     auto& materials = m_resourceData->materials;
     auto& textures = m_resourceData->textures;
     auto& regions = ktxTextureData.copyRegions;
@@ -801,7 +911,8 @@ void SceneBuilder::upload_scene_data(const GeometricData& geoData, ktxTextureDat
     cmd.set_handle(m_context.get_immediate_info().immediateCommandBuffer);
     cmd.set_allocator(m_context.get_allocator());
     cmd.begin();
-    cmd.upload_uniform(lights.data(), lights.size(), lightBuffer);
+    cmd.upload_uniform(pointLights.data(), pointLights.size(), pointLightBuffer);
+    cmd.upload_uniform(spotLights.data(), spotLights.size(), spotLightBuffer);
     cmd.upload_uniform(materials.data(), materials.size(), materialBuffer);
     cmd.copy_buffer(geoStaging, vertexBuffer, 0, 0, vertexBufferSize);
     cmd.copy_buffer(geoStaging, indexBuffer, vertexBufferSize, 0, indexBufferSize);
@@ -851,7 +962,8 @@ void SceneBuilder::upload_scene_data(const GeometricData& geoData, ktxTextureDat
     m_resourceData->indexBuffer = indexBuffer;
     m_resourceData->vertexBuffer = vertexBuffer;
     m_resourceData->materialBuffer = materialBuffer;
-    m_resourceData->lightBuffer = lightBuffer;
+    m_resourceData->pointLightBuffer = pointLightBuffer;
+    m_resourceData->spotLightBuffer = spotLightBuffer;
 }
 
 GeoBuffers SceneBuilder::prep_geo_buffers(const GeometricData &geoData) const {
@@ -949,16 +1061,26 @@ Buffer SceneBuilder::prepare_material_buffer() const {
     return materialBuffer;
 }
 
-Buffer SceneBuilder::prepare_light_buffer() const {
-    const auto& lights = m_resourceData->lights;
-    const u64 lightBufferSize = lights.size() * sizeof(Light);
-    const auto lightBuffer = m_context.create_buffer(
+Buffer SceneBuilder::prepare_point_light_buffer() const
+{
+    constexpr u64 lightBufferSize = sizeof(PointLight) * MAX_POINT_LIGHTS;
+
+    return m_context.create_buffer(
         lightBufferSize,
         vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
         VMA_MEMORY_USAGE_CPU_TO_GPU
-    );
+        );
+}
 
-    return lightBuffer;
+Buffer SceneBuilder::prepare_spot_light_buffer() const
+{
+    constexpr u64 lightBufferSize = sizeof(SpotLight) * MAX_SPOT_LIGHTS;
+
+    return m_context.create_buffer(
+        lightBufferSize,
+        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+        VMA_MEMORY_USAGE_CPU_TO_GPU
+        );
 }
 
 u16 SceneBuilder::get_metadata_at_index(const u32 index) const {
