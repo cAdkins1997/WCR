@@ -698,7 +698,7 @@ SwapChainSupportDetails Device::query_swapchain_support(const vk::PhysicalDevice
     return details;
 }
 
-vk::SurfaceFormatKHR Device::choose_swap_surface_format(const std::vector<vk::SurfaceFormatKHR>& availableFormats)
+vk::SurfaceFormatKHR Device::choose_swap_surface_format(const std::span<vk::SurfaceFormatKHR> availableFormats)
 {
     const auto it = std::ranges::find_if(availableFormats, [](auto format)
     {
@@ -707,7 +707,7 @@ vk::SurfaceFormatKHR Device::choose_swap_surface_format(const std::vector<vk::Su
     return *it;
 }
 
-vk::PresentModeKHR Device::choose_swap_present_mode(const std::vector<vk::PresentModeKHR>& availablePresentModes)
+vk::PresentModeKHR Device::choose_swap_present_mode(const std::span<vk::PresentModeKHR> availablePresentModes)
 {
     if (const auto it = std::ranges::find(availablePresentModes, vk::PresentModeKHR::eMailbox); it != availablePresentModes.end())
         return *it;

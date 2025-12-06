@@ -729,7 +729,7 @@ void SceneBuilder::create_lights(const fastgltf::Asset &asset, Scene &scene) con
     }
 }
 
-void SceneBuilder::create_images(const std::vector<ktxTexture*>& ktxTexturePs, Scene &scene) const {
+void SceneBuilder::create_images(const std::span<ktxTexture*> ktxTexturePs, Scene &scene) const {
 
     auto& textures = m_resourceData->textures;
     auto& textureMetadata = m_resourceData->texturesMetadata;
@@ -757,13 +757,15 @@ ktxTextureData SceneBuilder::ktx_texture_data_from_gltf(fastgltf::Asset &asset) 
     std::vector<ktxTexture*> texturePs;
     texturePs.reserve(asset.images.size());
 
-    std::vector<std::vector<vk::BufferImageCopy>> copyRegions;
+    std::vector<u16> mipLevelsArray;
+    mipLevelsArray.reserve(asset.images.size());
+
+    std::vector<vk::BufferImageCopy> copyRegions;
     copyRegions.reserve(asset.images.size());
 
     u64 stagingBufferSize = 0;
 
-    for (auto& gltfImage : asset.images) {
-        std::vector<vk::BufferImageCopy> newRegions;
+    for (auto& [data, name] : asset.images) {
         std::visit(fastgltf::visitor {
             [&](auto& arg) {},
                 [&](fastgltf::sources::URI& path) {
@@ -783,6 +785,7 @@ ktxTextureData SceneBuilder::ktx_texture_data_from_gltf(fastgltf::Asset &asset) 
 
                     texturePs.push_back(texture);
                     const ku32 mipLevels = texture->numLevels;
+                    mipLevelsArray.push_back(mipLevels);
 
                     for (u32 i = 0; i < mipLevels; i++) {
                         ku64 imageOffset = stagingBufferSize;
@@ -799,7 +802,7 @@ ktxTextureData SceneBuilder::ktx_texture_data_from_gltf(fastgltf::Asset &asset) 
                             copyRegion.imageExtent.depth = 1;
                             copyRegion.bufferOffset = offset;
 
-                            newRegions.push_back(copyRegion);
+                            copyRegions.push_back(copyRegion);
                         }
                     }
 
@@ -818,6 +821,7 @@ ktxTextureData SceneBuilder::ktx_texture_data_from_gltf(fastgltf::Asset &asset) 
                     throw std::runtime_error("Failed to load KTX texture");
 
                 const ku32 mipLevels = texture->numLevels;
+                mipLevelsArray.push_back(mipLevels);
 
                 stagingBufferSize += textureSize;
 
@@ -834,7 +838,7 @@ ktxTextureData SceneBuilder::ktx_texture_data_from_gltf(fastgltf::Asset &asset) 
                         copyRegion.imageExtent.depth = 1;
                         copyRegion.bufferOffset = offset;
 
-                        newRegions.push_back(copyRegion);
+                        copyRegions.push_back(copyRegion);
                     }
                 }
             },
@@ -862,6 +866,8 @@ ktxTextureData SceneBuilder::ktx_texture_data_from_gltf(fastgltf::Asset &asset) 
                                 throw std::runtime_error("Failed to load KTX texture");
 
                             const ku32 mipLevels = texture->numLevels;
+                            mipLevelsArray.push_back(mipLevels);
+
                             const ku32 textureSize = texture->dataSize;
                             stagingBufferSize += textureSize;
 
@@ -878,15 +884,13 @@ ktxTextureData SceneBuilder::ktx_texture_data_from_gltf(fastgltf::Asset &asset) 
                                     copyRegion.imageExtent.depth = 1;
                                     copyRegion.bufferOffset = offset;
 
-                                    newRegions.push_back(copyRegion);
+                                    copyRegions.push_back(copyRegion);
                                 }
                             }
                         }
                     }, buffer.data);
             }
-        }, gltfImage.data);
-
-        copyRegions.push_back(newRegions);
+        }, data);
     }
 
     return {texturePs, copyRegions, stagingBufferSize};
@@ -919,45 +923,23 @@ void SceneBuilder::upload_scene_data(const GeometricData& geoData, ktxTextureDat
 
     u64 index = 0;
     for (auto& texture : textures) {
-        const i64 mipLevels = texture.mipLevels;
+        auto begin = regions.begin() + index;
+        auto end = begin + texture.mipLevels;
         cmd.image_barrier(texture.handle, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
         cmd.copy_buffer_to_image(
             imageStaging,
             texture,
             vk::ImageLayout::eTransferDstOptimal,
-            regions[index]
+            std::span(begin, end)
             );
         cmd.image_barrier(texture.handle, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
 
-        index++;
+        if (texture.mipLevels == 0) { index++; }
+        else { index += texture.mipLevels; }
     }
     cmd.end();
 
     m_context.submit_upload_work();
-
-    /*m_context.submit_immediate_work([&](const CommandBuffer &cmd) {
-        cmd.upload_uniform(lights.data(), lights.size(), lightBuffer);
-        cmd.upload_uniform(materials.data(), materials.size(), materialBuffer);
-        cmd.copy_buffer(geoStaging, vertexBuffer, 0, 0, vertexBufferSize);
-        cmd.copy_buffer(imageStaging, indexBuffer, vertexBufferSize, 0, indexBufferSize);
-
-        i64 previousMipLevels = 0;
-        for (auto& texture : textures) {
-            const i64 mipLevels = texture.mipLevels;
-            cmd.image_barrier(texture.handle, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-            cmd.copy_buffer_to_image(
-                imageStaging,
-                texture,
-                vk::ImageLayout::eTransferDstOptimal,
-                std::span(
-                    regions.begin() + previousMipLevels,
-                    regions.end() + mipLevels)
-                );
-            cmd.image_barrier(texture.handle, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
-
-            previousMipLevels = mipLevels;
-        }
-    });*/
 
     m_resourceData->indexBuffer = indexBuffer;
     m_resourceData->vertexBuffer = vertexBuffer;

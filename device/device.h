@@ -116,8 +116,8 @@ private:
     [[nodiscard]] QueueFamilyIndices find_queue_families(vk::PhysicalDevice gpu) const;
     bool check_device_extension_support(vk::PhysicalDevice gpu);
     SwapChainSupportDetails query_swapchain_support(vk::PhysicalDevice gpu);
-    vk::SurfaceFormatKHR choose_swap_surface_format(const std::vector<vk::SurfaceFormatKHR>& availableFormats);
-    vk::PresentModeKHR choose_swap_present_mode(const std::vector<vk::PresentModeKHR>& availablePresentModes);
+    static vk::SurfaceFormatKHR choose_swap_surface_format(const std::span<vk::SurfaceFormatKHR> availableFormats);
+    static vk::PresentModeKHR choose_swap_present_mode(const std::span<vk::PresentModeKHR> availablePresentModes);
     [[nodiscard]] vk::Extent2D choose_swap_extent(const vk::SurfaceCapabilitiesKHR& capabilities, vk::Extent2D extent) const;
 
     void destroy_swapchain();

@@ -171,7 +171,7 @@ struct Scene {
 
 struct ktxTextureData {
     std::vector<ktxTexture*> texturePs;
-    std::vector<std::vector<vk::BufferImageCopy>> copyRegions;
+    std::vector<vk::BufferImageCopy> copyRegions;
     u64 stagingBufferSize{};
 };
 
@@ -286,7 +286,7 @@ private:
     void create_materials(const fastgltf::Asset& asset, Scene& scene) const;
     void create_samplers(const fastgltf::Asset& asset, Scene& scene) const;
     void create_lights(const fastgltf::Asset& asset, Scene& scene) const;
-    void create_images(const std::vector<ktxTexture*>& ktxTexturePs, Scene& scene) const;
+    void create_images(std::span<ktxTexture*> ktxTexturePs, Scene& scene) const;
 
     ktxTextureData ktx_texture_data_from_gltf(fastgltf::Asset& asset);
 

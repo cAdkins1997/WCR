@@ -154,9 +154,14 @@ Image Context::create_image(
     imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
 
     if (mipmapped)
+    {
         imageCI.mipLevels = mipLevels;
+        newImage.mipLevels = mipLevels;
+    }
     else
+    {
         imageCI.mipLevels = 1;
+    }
 
     VmaAllocationCreateInfo allocInfo{};
     allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
