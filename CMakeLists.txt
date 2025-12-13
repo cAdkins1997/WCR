@@ -80,11 +80,27 @@ file(GLOB IMGUI_GLOB
         ${IMGUI_PATH}/backends/imgui_impl_glfw.h
         ${IMGUI_PATH}/backends/imgui_impl_glfw.cpp
         ${IMGUI_PATH}/backends/imgui_impl_vulkan.h
-        ${IMGUI_PATH}/backends/imgui_impl_vulkan.cpp)
+        ${IMGUI_PATH}/backends/imgui_impl_vulkan.cpp
+)
 
-add_library("imgui" STATIC ${IMGUI_GLOB})
+add_library("imgui" STATIC ${IMGUI_GLOB}
+        include/vgizmo3d/vGizmo3D/vGizmo.cpp)
 target_include_directories("imgui" PUBLIC ${IMGUI_PATH})
 target_link_libraries("imgui" PRIVATE glfw Vulkan::Vulkan)
+
+set(VGIZMO_PATH ${CMAKE_CURRENT_LIST_DIR}/include/vgizmo3d/vGizmo3D)
+file(GLOB VGIZMO_BLOB
+        ${VGIZMO_PATH}/vgConfig.h
+        ${VGIZMO_PATH}/vGizmo.h
+        ${VGIZMO_PATH}/vGizmo3D.h
+        ${VGIZMO_PATH}/vGismoMath.h
+        ${VGIZMO_PATH}/vgMath.h
+        ${VGIZMO_PATH}/vGizmo.cpp
+)
+
+add_library("vGizmo3d" STATIC ${VGIZMO_BLOB})
+target_include_directories("vGizmo3d" PUBLIC ${VGIZMO_PATH})
+target_link_libraries("vGizmo3d" PRIVATE glfw Vulkan::Vulkan)
 
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -98,6 +114,7 @@ target_link_libraries(
         imgui
         ktx
         meshoptimizer
+        vGizmo3d
 )
 
 if (UNIX AND NOT APPLE)

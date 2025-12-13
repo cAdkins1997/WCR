@@ -189,6 +189,26 @@ void Application::draw_imgui(const CommandBuffer &cmd, const vk::ImageView view,
     vkCmdEndRendering(cmdHandle);
 }
 
+void Application::draw_gizmos()
+{
+    static u32 leftPress = 0, rightPress = 0;
+    f64 x, y;
+    const auto window = context->p_get_window();
+    glfwGetCursorPos(window, &x, &y);
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) != leftPress)
+    {
+        leftPress = leftPress == GLFW_PRESS ? GLFW_RELEASE : GLFW_PRESS;
+        track.mouse(vg::evLeftButton, get_vgizmo_key_mod(), leftPress, x, y);
+    }
+    if(glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) != rightPress) { // same thing for rightButton
+        rightPress = rightPress == GLFW_PRESS ? GLFW_RELEASE : GLFW_PRESS;
+        track.mouse(vg::evRightButton,get_vgizmo_key_mod(), rightPress, x, y);
+    }
+
+    track.motion(x, y);
+    track.idle();
+}
+
 void Application::imgui_point_lights(const CommandBuffer& cmd)
 {
     ImGui::BeginChild("Point Lights");
@@ -398,4 +418,32 @@ void Application::init_gui_data() {
     imguiVariables.spotLights = sceneManager->get_all_spot_lights_p();
     imguiVariables.numPointLights = static_cast<i32>(sceneManager->get_num_point_lights());
     imguiVariables.numSpotLights = static_cast<i32>(sceneManager->get_num_spot_lights());
+}
+
+void Application::init_vgizmo_3d()
+{
+    track.setGizmoRotControl(vg::evButton1, 0);
+    track.setGizmoRotXControl(vg::evButton1,vg::evShiftModifier);
+    track.setGizmoRotYControl(vg::evButton1,vg::evControlModifier);
+    track.setGizmoRotZControl(vg::evButton1,vg::evAltModifier | vg::evSuperModifier);
+    track.setGizmoSecondaryRotControl(vg::evButton2, 0);
+    track.setDollyControl(vg::evButton2, vg::evControlModifier);
+    track.setPanControl(vg::evButton2, vg::evShiftModifier);
+
+    const auto extent = context->get_display_extent();
+    track.viewportSize(extent.width, extent.height);
+}
+
+u32 Application::get_vgizmo_key_mod()
+{
+    const auto window = context->p_get_window();
+    if((glfwGetKey(window,GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) || (glfwGetKey(window,GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS))
+        return vg::evControlModifier;
+    if((glfwGetKey(window,GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) || (glfwGetKey(window,GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS))
+        return vg::evShiftModifier;
+    if((glfwGetKey(window,GLFW_KEY_LEFT_ALT) == GLFW_PRESS) || (glfwGetKey(window,GLFW_KEY_RIGHT_ALT) == GLFW_PRESS))
+        return vg::evAltModifier;
+    if((glfwGetKey(window,GLFW_KEY_LEFT_SUPER) == GLFW_PRESS) || (glfwGetKey(window,GLFW_KEY_RIGHT_SUPER) == GLFW_PRESS))
+        return vg::evSuperModifier;
+    return vg::evNoModifier;
 }

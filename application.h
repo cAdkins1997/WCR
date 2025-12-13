@@ -6,6 +6,9 @@
 #include "scenes/scenemanager.h"
 #include "camera.h"
 
+#include <vGizmo.h>
+
+#include "vGizmo3D.h"
 
 void mouse_callback(GLFWwindow* window, f64 xPosIn, f64 yPosIn);
 void process_scroll(GLFWwindow* window, f64 xOffset, f64 yOffset);
@@ -30,6 +33,7 @@ public:
 
     void draw();
     void draw_imgui(const CommandBuffer& cmd, vk::ImageView view, vk::Extent2D extent);
+    void draw_gizmos();
     void imgui_point_lights(const CommandBuffer& cmd);
     void imgui_spot_lights(const CommandBuffer& cmd);
     void run();
@@ -39,8 +43,11 @@ public:
     void init_descriptors();
     void init_scene_data();
     void init_gui_data();
+    void init_vgizmo_3d();
 
 private:
+    u32 get_vgizmo_key_mod();
+
     std::unique_ptr<Context> context;
     std::unique_ptr<DescriptorBuilder> descriptorBuilder;
     std::shared_ptr<ResourceData> resourceData;
@@ -49,5 +56,5 @@ private:
     SceneHandle testScene{};
     Pipeline opaquePipeline;
     ImGUIVariables imguiVariables;
-
+    vg::vGizmo3D track;
 };

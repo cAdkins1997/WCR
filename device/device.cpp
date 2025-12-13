@@ -628,7 +628,7 @@ QueueFamilyIndices Device::find_queue_families(const vk::PhysicalDevice gpu) con
     return indices;
 }
 
-bool Device::check_device_extension_support(vk::PhysicalDevice gpu)
+bool Device::check_device_extension_support(const vk::PhysicalDevice gpu)
 {
     u32 extensionCount;
     vk_check(

@@ -73,7 +73,7 @@ float4 pixelMain(VSOutput input) : SV_Target {
             float3 kDiffuse = float3(1.0) - kSpecular;
 
             float3 numerator = NDF * G * F;
-            float denominator = 4.0 * max(dot(normal, view), 0.0) * normalLightIncidence + 0.0001;
+            float denominator = 4.0 * max(dot(normal, view), 0.0) * normalLightIncidence + 0.000001;
             float3 specular = numerator / denominator;
 
             float3 radiance = currentLight.colour * attenuation * windowing * fDir;
