@@ -97,6 +97,7 @@ public:
 
     bool recreate_swapchain();
     void recreate_draw_images();
+    void init_imgui() const;
 
 private:
     void init_window(vk::Extent2D extent);

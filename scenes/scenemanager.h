@@ -203,8 +203,7 @@ struct ResourceData {
 class SceneManager {
 
 public:
-    explicit SceneManager(const std::shared_ptr<ResourceData>& resourceData)
-    : m_resourceData(resourceData) {
+    explicit SceneManager(const std::shared_ptr<ResourceData>& resourceData) : m_resourceData(resourceData) {
         for (const auto& [surfaces] : m_resourceData->meshes)
             for (const auto& surface : surfaces)
                 numSurfaces++;

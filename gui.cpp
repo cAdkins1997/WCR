@@ -2,23 +2,25 @@
 #include "gui.h"
 
 ImGUIManager::ImGUIManager(Context &context, SceneManager& sceneManager) : m_Context(context), m_SceneManager(sceneManager) {
-    init_imgui();
     init_gui_data();
 }
 
-void ImGUIManager::draw_imgui(const CommandBuffer &cmd, vk::ImageView imageView, GizmoMatrices& matrices, vk::Extent2D extent) {
+void ImGUIManager::draw_imgui(const CommandBuffer& cmd, const vk::ImageView imageView, GizmoMatrices& matrices, const vk::Extent2D extent) {
 
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
+
     ImGui::NewFrame();
     ImGui::Begin("Scene Settings");
+
+    ImGuizmo::SetOrthographic(false);
+    ImGuizmo::BeginFrame();
 
     ImGui::BeginChild("Light Settings");
 
     update_gui_data(matrices.view, matrices.projection, matrices.rotation, matrices.translation, matrices.scale);
     imgui_point_lights(cmd);
     imgui_spot_lights(cmd);
-
 
     ImGui::EndChild();
     ImGui::End();
@@ -46,6 +48,7 @@ void ImGUIManager::draw_imgui(const CommandBuffer &cmd, vk::ImageView imageView,
 }
 
 void ImGUIManager::update_gui_data(glm::mat4& view, glm::mat4& projection, glm::mat4& rotation, glm::mat4& translation, glm::mat4& scale) {
+
     static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::ROTATE);
     static ImGuizmo::MODE mCurrentGizmoMode(ImGuizmo::WORLD);
     if (ImGui::IsKeyPressed(ImGuiKey_T))
@@ -239,63 +242,6 @@ void ImGUIManager::imgui_spot_lights(const CommandBuffer &cmd) {
     }
 
     ImGui::EndChild();
-}
-
-void ImGUIManager::init_imgui() const {
-            const vk::DescriptorPoolSize poolSizes[] = {
-            { vk::DescriptorType::eSampler, 1000 },
-        { vk::DescriptorType::eCombinedImageSampler, 1000 },
-        { vk::DescriptorType::eSampledImage, 1000 },
-        { vk::DescriptorType::eStorageImage, 1000 },
-        { vk::DescriptorType::eUniformTexelBuffer, 1000 },
-        { vk::DescriptorType::eStorageTexelBuffer, 1000 },
-        { vk::DescriptorType::eUniformBuffer, 1000 },
-        { vk::DescriptorType::eStorageBuffer, 1000 },
-        { vk::DescriptorType::eUniformBufferDynamic, 1000 },
-        { vk::DescriptorType::eStorageBufferDynamic, 1000 },
-        { vk::DescriptorType::eInputAttachment, 1000 }
-        };
-
-        vk::DescriptorPoolCreateInfo poolCI;
-        poolCI.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-        poolCI.maxSets = 1000;
-        poolCI.poolSizeCount = static_cast<u32>(std::size(poolSizes));
-        poolCI.pPoolSizes = poolSizes;
-
-        const auto device = m_Context.get_device();
-        const auto handle = device.get_handle();
-        vk::DescriptorPool imguiPool;
-        vk_check(
-            handle.createDescriptorPool(&poolCI, nullptr, &imguiPool),
-            "Failed to create descriptor pool"
-        );
-
-        IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-        ImGuiIO& io = ImGui::GetIO();
-        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-
-        ImGui::StyleColorsDark();
-
-        ImGui_ImplGlfw_InitForVulkan(device.get_window_p(), true);
-        ImGui_ImplVulkan_InitInfo initInfo = {};
-        initInfo.Instance = device.get_instance();
-        initInfo.PhysicalDevice = device.get_gpu();
-        initInfo.Device = handle;
-        initInfo.Queue = m_Context.get_graphic_queue();
-        initInfo.DescriptorPool = imguiPool;
-        initInfo.MinImageCount = 3;
-        initInfo.ImageCount = 3;
-        initInfo.UseDynamicRendering = true;
-
-        initInfo.PipelineRenderingCreateInfo = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-        initInfo.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
-        constexpr VkFormat colorAttachFormat = VK_FORMAT_B8G8R8A8_SRGB;
-        initInfo.PipelineRenderingCreateInfo.pColorAttachmentFormats = &colorAttachFormat;
-        initInfo.PipelineRenderingCreateInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
-        initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-        ImGui_ImplVulkan_Init(&initInfo);
 }
 
 void ImGUIManager::init_gui_data() {

@@ -51,6 +51,8 @@ public:
 
     [[nodiscard]] vk::Extent2D get_display_extent() const { return m_Device->get_display_extent(); }
 
+    void init_imgui() const;
+
     void submit_work(
         const CommandBuffer& cmd,
         vk::PipelineStageFlagBits2 wait,

@@ -60,18 +60,20 @@ void process_input(GLFWwindow *window, const f32 deltaTime, u32 &inputDelay, boo
 
 Application::Application(std::string_view appName, u32 width, u32 height)
 {
-    context = std::make_unique<Context>(appName, width, height);
+    context = std::make_shared<Context>(appName, width, height);
     resourceData = std::make_shared<ResourceData>();
     descriptorBuilder = std::make_unique<DescriptorBuilder>(context->get_device());
     sceneBuilder = std::make_unique<SceneBuilder>(*context, resourceData);
-    sceneManager = std::make_unique<SceneManager>(resourceData);
-    imguiManager = std::make_unique<ImGUIManager>(*context, *sceneManager);
+    sceneManager = std::make_shared<SceneManager>(resourceData);
+
+    context->init_imgui();
 
     const auto windowP = context->p_get_window();
     glfwSetCursorPosCallback(windowP, mouse_callback);
     glfwSetScrollCallback(windowP,  process_scroll);
     glfwSetInputMode(windowP, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSetWindowUserPointer(windowP, &context->get_device());
+
 
     init();
     run();
@@ -220,6 +222,8 @@ void Application::init_scene_data() {
     if (auto gltf = sceneBuilder->parse_gltf("../assets/scenes/sponza/NewSponza_Main_glTF_003.gltf"); gltf.has_value())
         if (const auto scene = sceneBuilder->build_scene(gltf.value()); scene.has_value())
             testScene = scene.value();
+
+    imguiManager = std::make_unique<ImGUIManager>(*context, *sceneManager);
 
     SceneData sceneData{};
     sceneData.view = camera.get_view_matrix();

@@ -35,8 +35,6 @@ public:
 private:
     void imgui_point_lights(const CommandBuffer& cmd);
     void imgui_spot_lights(const CommandBuffer& cmd);
-
-    void init_imgui() const;
     void init_gui_data();
 
     Context& m_Context;

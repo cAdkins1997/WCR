@@ -27,11 +27,11 @@ public:
     void init_scene_data();
 
 private:
-    std::unique_ptr<Context> context;
+    std::shared_ptr<Context> context;
     std::unique_ptr<DescriptorBuilder> descriptorBuilder;
     std::shared_ptr<ResourceData> resourceData;
     std::unique_ptr<SceneBuilder> sceneBuilder;
-    std::unique_ptr<SceneManager> sceneManager;
+    std::shared_ptr<SceneManager> sceneManager;
     std::unique_ptr<ImGUIManager> imguiManager;
     SceneHandle testScene{};
     Pipeline opaquePipeline;

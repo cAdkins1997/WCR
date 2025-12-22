@@ -238,6 +238,10 @@ void Context::destroy_shader(const Shader &shader) const {
     m_Device->get_handle().destroy(shader.module);
 }
 
+void Context::init_imgui() const {
+    m_Device->init_imgui();
+}
+
 void Context::submit_work(const CommandBuffer &cmd,
                           const vk::PipelineStageFlagBits2 wait,
                           const vk::PipelineStageFlagBits2 signal,

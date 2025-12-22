@@ -8,6 +8,6 @@
 void vk_check(const vk::Result result,  const char* outputMessage) {
 #ifdef DEBUG
     if (result != vk::Result::eSuccess)
-        throw std::runtime_error((outputMessage + to_string(result) + '\n'));
+        throw std::runtime_error(outputMessage + to_string(result) + '\n');
 #endif
 }
