@@ -4,7 +4,7 @@
 void CommandBuffer::begin() const
 {
     cmd.reset();
-    const vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+    constexpr vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
     vk_check(cmd.begin(&beginInfo), "Failed to begin command buffer");
 }
 

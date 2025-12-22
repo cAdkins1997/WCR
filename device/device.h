@@ -92,10 +92,11 @@ public:
     [[nodiscard]] ImmediateCommandInfo get_immediate_info() const { return immediateInfo; }
     [[nodiscard]] VkRenderingAttachmentInfo get_draw_attachment() const { return drawAttachment; }
     [[nodiscard]] VkRenderingAttachmentInfo get_depth_attachment() const { return depthAttachment; }
+    [[nodiscard]] vk::Instance get_instance() const { return instance; }
+    [[nodiscard]] vk::PhysicalDevice get_gpu() const { return m_Gpu; }
 
     bool recreate_swapchain();
     void recreate_draw_images();
-    void init_imgui() const;
 
 private:
     void init_window(vk::Extent2D extent);

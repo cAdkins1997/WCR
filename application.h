@@ -5,10 +5,7 @@
 #include "pipelines/descriptors.h"
 #include "scenes/scenemanager.h"
 #include "camera.h"
-
-#include <vGizmo.h>
-
-#include "vGizmo3D.h"
+#include "gui.h"
 
 void mouse_callback(GLFWwindow* window, f64 xPosIn, f64 yPosIn);
 void process_scroll(GLFWwindow* window, f64 xOffset, f64 yOffset);
@@ -16,45 +13,26 @@ void process_input(GLFWwindow* window, f32 deltaTime, bool& mouseLook);
 
 inline auto camera = Camera(glm::vec3(0.0f, 10.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), -90.0f, 0.0f);
 
-struct ImGUIVariables {
-    i32 selectedPointLight = 0;
-    i32 selectedSpotLight = 0;
-    i32 numPointLights = 0;
-    i32 numSpotLights = 0;
-    PointLight* pointLights = nullptr;
-    SpotLight* spotLights = nullptr;
-    bool lightsDirty = false;
-};
-
 class Application {
 public:
     Application(std::string_view appName, u32 width, u32 height);
     ~Application();
 
-    void draw();
-    void draw_imgui(const CommandBuffer& cmd, vk::ImageView view, vk::Extent2D extent);
-    void draw_gizmos();
-    void imgui_point_lights(const CommandBuffer& cmd);
-    void imgui_spot_lights(const CommandBuffer& cmd);
-    void run();
-    void update();
+    void draw() const;
+    void run() const;
+    void update() const;
     void init();
     void init_opaque_pipeline();
     void init_descriptors();
     void init_scene_data();
-    void init_gui_data();
-    void init_vgizmo_3d();
 
 private:
-    u32 get_vgizmo_key_mod();
-
     std::unique_ptr<Context> context;
     std::unique_ptr<DescriptorBuilder> descriptorBuilder;
     std::shared_ptr<ResourceData> resourceData;
     std::unique_ptr<SceneBuilder> sceneBuilder;
     std::unique_ptr<SceneManager> sceneManager;
+    std::unique_ptr<ImGUIManager> imguiManager;
     SceneHandle testScene{};
     Pipeline opaquePipeline;
-    ImGUIVariables imguiVariables;
-    vg::vGizmo3D track;
 };

@@ -28,6 +28,8 @@ add_executable(WCR main.cpp
         pipelines/pipelines.cpp
         scenes/scenemanager.cpp
         scenes/scenemanager.h
+        gui.cpp
+        gui.h
 )
 
 find_package(Vulkan REQUIRED)
@@ -61,6 +63,10 @@ FetchContent_Declare(glfw3
 )
 FetchContent_MakeAvailable(glfw3)
 
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+
 add_subdirectory(include/fastgltf)
 
 set(IMGUI_PATH ${CMAKE_CURRENT_LIST_DIR}/include/imgui)
@@ -83,28 +89,28 @@ file(GLOB IMGUI_GLOB
         ${IMGUI_PATH}/backends/imgui_impl_vulkan.cpp
 )
 
-add_library("imgui" STATIC ${IMGUI_GLOB}
-        include/vgizmo3d/vGizmo3D/vGizmo.cpp)
+add_library("imgui" STATIC ${IMGUI_GLOB})
 target_include_directories("imgui" PUBLIC ${IMGUI_PATH})
 target_link_libraries("imgui" PRIVATE glfw Vulkan::Vulkan)
 
-set(VGIZMO_PATH ${CMAKE_CURRENT_LIST_DIR}/include/vgizmo3d/vGizmo3D)
-file(GLOB VGIZMO_BLOB
-        ${VGIZMO_PATH}/vgConfig.h
-        ${VGIZMO_PATH}/vGizmo.h
-        ${VGIZMO_PATH}/vGizmo3D.h
-        ${VGIZMO_PATH}/vGismoMath.h
-        ${VGIZMO_PATH}/vgMath.h
-        ${VGIZMO_PATH}/vGizmo.cpp
+set(IMGUIZMO_PATH ${CMAKE_CURRENT_LIST_DIR}/include/imguizmo)
+file(GLOB IMGUIZMO_BLOB
+        ${IMGUIZMO_PATH}/GraphEditor.h
+        ${IMGUIZMO_PATH}/GraphEditor.cpp
+        ${IMGUIZMO_PATH}/ImCurveEdit.h
+        ${IMGUIZMO_PATH}/ImCurveEdit.cpp
+        ${IMGUIZMO_PATH}/ImGradient.h
+        ${IMGUIZMO_PATH}/ImGradient.cpp
+        ${IMGUIZMO_PATH}/ImGuizmo.h
+        ${IMGUIZMO_PATH}/ImGuizmo.cpp
+        ${IMGUIZMO_PATH}/ImSequencer.h
+        ${IMGUIZMO_PATH}/ImSequencer.cpp
+        ${IMGUIZMO_PATH}/ImZoomSlider.h
 )
 
-add_library("vGizmo3d" STATIC ${VGIZMO_BLOB})
-target_include_directories("vGizmo3d" PUBLIC ${VGIZMO_PATH})
-target_link_libraries("vGizmo3d" PRIVATE glfw Vulkan::Vulkan)
-
-set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+add_library("imguizmo" STATIC ${IMGUIZMO_BLOB})
+target_include_directories("imguizmo" PUBLIC ${IMGUIZMO_PATH})
+target_link_directories("imguizmo" PRIVATE imgui glfw Vulkan::Vulkan)
 
 target_link_libraries(
         ${PROJECT_NAME} PRIVATE
@@ -114,7 +120,7 @@ target_link_libraries(
         imgui
         ktx
         meshoptimizer
-        vGizmo3d
+        imguizmo
 )
 
 if (UNIX AND NOT APPLE)
