@@ -61,18 +61,19 @@ void process_input(GLFWwindow *window, const f32 deltaTime, u32 &inputDelay, boo
 Application::Application(std::string_view appName, u32 width, u32 height)
 {
     context = std::make_shared<Context>(appName, width, height);
-    resourceData = std::make_shared<ResourceData>();
-    descriptorBuilder = std::make_unique<DescriptorBuilder>(context->get_device());
-    sceneBuilder = std::make_unique<SceneBuilder>(*context, resourceData);
-    sceneManager = std::make_shared<SceneManager>(resourceData);
-
-    context->init_imgui();
 
     const auto windowP = context->p_get_window();
     glfwSetCursorPosCallback(windowP, mouse_callback);
     glfwSetScrollCallback(windowP,  process_scroll);
     glfwSetInputMode(windowP, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSetWindowUserPointer(windowP, &context->get_device());
+
+    resourceData = std::make_shared<ResourceData>();
+    descriptorBuilder = std::make_unique<DescriptorBuilder>(context->get_device());
+    sceneBuilder = std::make_unique<SceneBuilder>(*context, resourceData);
+    sceneManager = std::make_shared<SceneManager>(resourceData);
+
+    context->init_imgui();
 
 
     init();
@@ -81,8 +82,7 @@ Application::Application(std::string_view appName, u32 width, u32 height)
 
 Application::~Application() {
     const auto deviceHandle = context->get_device_handle();
-    auto allocator = context->get_allocator();
-    vkDeviceWaitIdle(context->get_device_handle());
+     vkDeviceWaitIdle(context->get_device_handle());
     sceneManager->release_gpu_resources(*context);
     descriptorBuilder->release_descriptor_resources();
     deviceHandle.destroyPipeline(opaquePipeline.pipeline);
@@ -140,8 +140,7 @@ void Application::draw() const {
         commandBuffer.blit_image(drawImage.handle, currentSwapchainImage, to_extent_3D(displayExtent), to_extent_3D(displayExtent));
         commandBuffer.image_barrier(currentSwapchainImage, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eColorAttachmentOptimal);
 
-        GizmoMatrices matrices {sceneData.view, sceneData.projection, {}, {}, {} };
-        imguiManager->draw_imgui(cmd.commandBuffer, swapchainData.swapchainImageView, matrices, displayExtent);
+        imguiManager->draw_imgui(cmd.commandBuffer, swapchainData.swapchainImageView, sceneData.view, sceneData.projection, displayExtent);
 
         commandBuffer.image_barrier(currentSwapchainImage, vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR);
         commandBuffer.end();

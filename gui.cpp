@@ -5,24 +5,46 @@ ImGUIManager::ImGUIManager(Context &context, SceneManager& sceneManager) : m_Con
     init_gui_data();
 }
 
-void ImGUIManager::draw_imgui(const CommandBuffer& cmd, const vk::ImageView imageView, GizmoMatrices& matrices, const vk::Extent2D extent) {
+void ImGUIManager::draw_imgui(const CommandBuffer& cmd, const vk::ImageView imageView, glm::mat4& view, glm::mat4& projection, const vk::Extent2D extent) {
 
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
 
     ImGui::NewFrame();
-    ImGui::Begin("Scene Settings");
-
-    ImGuizmo::SetOrthographic(false);
     ImGuizmo::BeginFrame();
+    ImGuizmo::SetOrthographic(false);
+
+    ImGui::Begin("Scene Settings");
 
     ImGui::BeginChild("Light Settings");
 
-    update_gui_data(matrices.view, matrices.projection, matrices.rotation, matrices.translation, matrices.scale);
     imgui_point_lights(cmd);
     imgui_spot_lights(cmd);
 
     ImGui::EndChild();
+
+    ImGui::BeginChild("Guizmo Settings");
+
+    constexpr glm::mat4 mat(1.0f);
+    update_gui_data(view, projection);
+
+    if (ImGuizmo::IsUsing())
+    {
+        ImGui::Text("Using gizmo");
+    }
+    else
+    {
+        ImGui::Text(ImGuizmo::IsOver()?"Over gizmo":"");
+        ImGui::SameLine();
+        ImGui::Text(ImGuizmo::IsOver(ImGuizmo::TRANSLATE) ? "Over translate gizmo" : "");
+        ImGui::SameLine();
+        ImGui::Text(ImGuizmo::IsOver(ImGuizmo::ROTATE) ? "Over rotate gizmo" : "");
+        ImGui::SameLine();
+        ImGui::Text(ImGuizmo::IsOver(ImGuizmo::SCALE) ? "Over scale gizmo" : "");
+    }
+    ImGui::Separator();
+    ImGui::EndChild();
+
     ImGui::End();
     ImGui::Render();
 
@@ -47,7 +69,9 @@ void ImGUIManager::draw_imgui(const CommandBuffer& cmd, const vk::ImageView imag
     vkCmdEndRendering(cmdHandle);
 }
 
-void ImGUIManager::update_gui_data(glm::mat4& view, glm::mat4& projection, glm::mat4& rotation, glm::mat4& translation, glm::mat4& scale) {
+void ImGUIManager::update_gui_data(glm::mat4& view, glm::mat4& projection) {
+    view[1][1] *= -1.0f;
+    projection[1][1] *= -1.0f;
 
     static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::ROTATE);
     static ImGuizmo::MODE mCurrentGizmoMode(ImGuizmo::WORLD);
@@ -66,8 +90,14 @@ void ImGUIManager::update_gui_data(glm::mat4& view, glm::mat4& projection, glm::
     if (ImGui::RadioButton("Scale", mCurrentGizmoOperation == ImGuizmo::SCALE))
         mCurrentGizmoOperation = ImGuizmo::SCALE;
 
+    auto& pointLight = imguiVariables.pointLights[imguiVariables.selectedPointLight];
     const auto pGizmo = reinterpret_cast<f32*>(&imguiVariables.gizmoConfig.gizmoMatrix);
-    const auto pTranslation = reinterpret_cast<f32*>(&translation);
+
+    auto* translation = &pointLight.position;
+    auto rotation = glm::vec3(1.0f);
+    auto scale = glm::vec3(1.0f);
+
+    const auto pTranslation = (f32*)translation;
     const auto pRotation = reinterpret_cast<f32*>(&rotation);
     const auto pScale = reinterpret_cast<f32*>(&scale);
     const auto pView = reinterpret_cast<f32*>(&view);
@@ -77,7 +107,7 @@ void ImGUIManager::update_gui_data(glm::mat4& view, glm::mat4& projection, glm::
     ImGui::InputFloat3("Tr", pTranslation);
     ImGui::InputFloat3("Rt", pRotation);
     ImGui::InputFloat3("Sc", pScale);
-    ImGuizmo::RecomposeMatrixFromComponents(pGizmo, pTranslation, pRotation, pScale);
+    ImGuizmo::RecomposeMatrixFromComponents(pTranslation, pRotation, pScale, pGizmo);
 
     if (mCurrentGizmoOperation != ImGuizmo::SCALE)
     {
@@ -87,6 +117,7 @@ void ImGUIManager::update_gui_data(glm::mat4& view, glm::mat4& projection, glm::
         if (ImGui::RadioButton("World", mCurrentGizmoMode == ImGuizmo::WORLD))
             mCurrentGizmoMode = ImGuizmo::WORLD;
     }
+
     static bool useSnap(false);
     if (ImGui::IsKeyPressed(ImGuiKey_S))
         useSnap = !useSnap;
@@ -109,9 +140,14 @@ void ImGUIManager::update_gui_data(glm::mat4& view, glm::mat4& projection, glm::
         default:
             break;
     }
-    const ImGuiIO& io = ImGui::GetIO();
-    ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
-    ImGuizmo::Manipulate(pView, pProjection, mCurrentGizmoOperation, mCurrentGizmoMode, pGizmo, nullptr, useSnap ? snapP : nullptr);
+
+    const auto io = m_Context.get_imgui_io();
+    ImGuizmo::SetRect(0, 0, io->DisplaySize.x, io->DisplaySize.y);
+    if (ImGuizmo::Manipulate(pView, pProjection, mCurrentGizmoOperation, mCurrentGizmoMode, pGizmo, nullptr, useSnap ? snapP : nullptr)) {
+        auto newTranslation = xyz(glm::vec4(translation->x, translation->y, translation->z, 0.0f) * imguiVariables.gizmoConfig.gizmoMatrix);
+        translation = &newTranslation;
+        imguiVariables.lightsDirty = true;
+    }
 }
 
 void ImGUIManager::imgui_point_lights(const CommandBuffer &cmd) {

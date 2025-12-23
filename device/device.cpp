@@ -518,7 +518,7 @@ void Device::init_depth_images()
     depthAttachment.clearValue.depthStencil.depth = 0.f;
 }
 
-void Device::init_imgui() const {
+void Device::init_imgui() {
             const vk::DescriptorPoolSize poolSizes[] = {
             { vk::DescriptorType::eSampler, 1000 },
         { vk::DescriptorType::eCombinedImageSampler, 1000 },
@@ -547,9 +547,9 @@ void Device::init_imgui() const {
 
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
-        ImGuiIO& io = ImGui::GetIO();
-        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+        io = &ImGui::GetIO();
+        io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        io->ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 
         ImGui::StyleColorsDark();
 
@@ -658,8 +658,8 @@ bool Device::check_device_extension_support(const vk::PhysicalDevice gpu)
     return requiredExtensions.empty();
 }
 
-SwapChainSupportDetails Device::query_swapchain_support(const vk::PhysicalDevice gpu)
-{
+SwapChainSupportDetails Device::query_swapchain_support(const vk::PhysicalDevice gpu) const {
+
     SwapChainSupportDetails details;
 
     vk_check(

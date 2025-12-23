@@ -34,6 +34,7 @@ public:
     [[nodiscard]] VkRenderingAttachmentInfo get_depth_attachment() const { return m_Device->get_depth_attachment(); }
     [[nodiscard]] std::array<FrameInFlight, MAX_FRAMES_IN_FLIGHT>& get_command_buffer_infos() const { return m_Device->commandBufferInfos; }
     [[nodiscard]] ImmediateCommandInfo get_immediate_info() const { return m_Device->get_immediate_info(); }
+    [[nodiscard]] ImGuiIO* get_imgui_io() const { return m_Device->get_imgui_io(); }
 
     [[nodiscard]] Buffer create_buffer(
      u64 allocationSize,

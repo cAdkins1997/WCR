@@ -94,10 +94,11 @@ public:
     [[nodiscard]] VkRenderingAttachmentInfo get_depth_attachment() const { return depthAttachment; }
     [[nodiscard]] vk::Instance get_instance() const { return instance; }
     [[nodiscard]] vk::PhysicalDevice get_gpu() const { return m_Gpu; }
+    [[nodiscard]] ImGuiIO* get_imgui_io() const { return io; }
 
     bool recreate_swapchain();
     void recreate_draw_images();
-    void init_imgui() const;
+    void init_imgui();
 
 private:
     void init_window(vk::Extent2D extent);
@@ -113,11 +114,11 @@ private:
     void init_depth_images();
 
 private:
-    std::vector<const char*> get_required_extensions();
+    static std::vector<const char*> get_required_extensions();
     bool gpu_is_suitable(vk::PhysicalDevice gpu);
     [[nodiscard]] QueueFamilyIndices find_queue_families(vk::PhysicalDevice gpu) const;
     bool check_device_extension_support(vk::PhysicalDevice gpu);
-    SwapChainSupportDetails query_swapchain_support(vk::PhysicalDevice gpu);
+    SwapChainSupportDetails query_swapchain_support(vk::PhysicalDevice gpu) const;
     static vk::SurfaceFormatKHR choose_swap_surface_format(const std::span<vk::SurfaceFormatKHR> availableFormats);
     static vk::PresentModeKHR choose_swap_present_mode(const std::span<vk::PresentModeKHR> availablePresentModes);
     [[nodiscard]] vk::Extent2D choose_swap_extent(const vk::SurfaceCapabilitiesKHR& capabilities, vk::Extent2D extent) const;
@@ -148,6 +149,7 @@ private:
     vk::Queue graphicsQueue, computeQueue, presentQueue, transferQueue;
 
     ImmediateCommandInfo immediateInfo;
+    ImGuiIO* io;
 
     VmaAllocator allocator{};
 };

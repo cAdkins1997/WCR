@@ -11,10 +11,6 @@ struct GizmoConfig {
     glm::vec3 snap;
 };
 
-struct GizmoMatrices {
-    glm::mat4 view, projection, rotation, translation, scale;
-};
-
 struct ImGUIVariables {
     GizmoConfig gizmoConfig{};
     i64 selectedPointLight = 0;
@@ -29,8 +25,8 @@ struct ImGUIVariables {
 class ImGUIManager {
 public:
     explicit ImGUIManager(Context& context, SceneManager& sceneManager);
-    void draw_imgui(const CommandBuffer& cmd, vk::ImageView imageView, GizmoMatrices& matrices, vk::Extent2D extent);
-    void update_gui_data(glm::mat4& view, glm::mat4& projection, glm::mat4& rotation, glm::mat4& translation, glm::mat4& scale);
+    void draw_imgui(const CommandBuffer& cmd, vk::ImageView imageView, glm::mat4& view, glm::mat4& projection, vk::Extent2D extent);
+    void update_gui_data(glm::mat4& view, glm::mat4& projection);
 
 private:
     void imgui_point_lights(const CommandBuffer& cmd);
