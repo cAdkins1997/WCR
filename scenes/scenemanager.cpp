@@ -13,8 +13,7 @@ Node& SceneManager::get_node(const NodeHandle handle) const {
     return m_resourceData->nodes[index];
 }
 
-SpotLight& SceneManager::get_spot_light(SpotLightHandle handle) const
-{
+SpotLight& SceneManager::get_spot_light(const SpotLightHandle handle) const {
     assert_handle(handle);
     const u32 index = get_handle_index(handle);
     return m_resourceData->spotLights[index];
@@ -328,7 +327,7 @@ SceneBuilder::SceneBuilder(Context &context, const std::shared_ptr<ResourceData>
     m_resourceData = resourceData;
 }
 
-std::optional<fastgltf::Asset> SceneBuilder::parse_gltf(const std::filesystem::path &path) const {
+std::optional<fastgltf::Asset> SceneBuilder::parse_gltf(const std::filesystem::path &path) {
     fastgltf::Parser parser(fastgltf::Extensions::KHR_lights_punctual);
     constexpr auto options =
         fastgltf::Options::DontRequireValidAssetMember |

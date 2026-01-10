@@ -271,7 +271,7 @@ class SceneBuilder {
 public:
     explicit SceneBuilder(Context& context, const std::shared_ptr<ResourceData>& resourceData);
 
-    [[nodiscard]] std::optional<fastgltf::Asset> parse_gltf(const std::filesystem::path& path) const;
+    [[nodiscard]] std::optional<fastgltf::Asset> parse_gltf(const std::filesystem::path& path) ;
     std::optional<SceneHandle> build_scene(fastgltf::Asset& asset);
 
     void write_textures(DescriptorBuilder& builder) const;
