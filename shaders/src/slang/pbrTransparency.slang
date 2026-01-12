@@ -88,7 +88,7 @@ float4 pixelMain(VSOutput input) : SV_Target {
     color = color / (color + float3(1.0));
     color = pow(color, float3(1.0 / 2.2));
 
-    return float4(color, material.baseColorFactor.w);
+    return float4(color, 1.0);
 }
 
 

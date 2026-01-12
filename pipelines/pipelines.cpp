@@ -97,7 +97,7 @@ void PipelineBuilder::set_depth_format(VkFormat format) {
     renderInfo.depthAttachmentFormat = static_cast<VkFormat>(format);
 }
 
-void PipelineBuilder::enable_depthtest(VkBool32 depthWriteEnable, VkCompareOp op) {
+void PipelineBuilder::enable_depthtest(const VkBool32 depthWriteEnable, const VkCompareOp op) {
     depthStencil.depthTestEnable = VK_TRUE;
     depthStencil.depthWriteEnable = depthWriteEnable;
     depthStencil.depthCompareOp = op;

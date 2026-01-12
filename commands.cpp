@@ -42,11 +42,11 @@ void CommandBuffer::image_barrier(const vk::Image image, const vk::ImageLayout c
 
 void CommandBuffer::buffer_barrier(
     const Buffer& buffer,
-    vk::DeviceSize offset,
-    vk::PipelineStageFlags srcStageFlags,
-    vk::AccessFlags srcAccessMask,
-    vk::PipelineStageFlags dstStageFlags,
-    vk::AccessFlags dstAccessMask) const
+    const vk::DeviceSize offset,
+    const vk::PipelineStageFlags srcStageFlags,
+    const vk::AccessFlags srcAccessMask,
+    const vk::PipelineStageFlags dstStageFlags,
+    const vk::AccessFlags dstAccessMask) const
 {
     vk::BufferMemoryBarrier barrier(srcAccessMask, dstAccessMask);
     barrier.buffer = buffer.handle;
@@ -298,10 +298,14 @@ void CommandBuffer::draw(const u32 count, const u32 startIndex) const
     cmd.drawIndexed(count, 1, startIndex, 0, 0);
 }
 
-void CommandBuffer::bind_pipeline(vk::PipelineBindPoint bindPoint, const Pipeline &_pipeline) {
+void CommandBuffer::bind_pipeline(const vk::PipelineBindPoint bindPoint, const Pipeline &_pipeline) {
     pipeline = _pipeline;
     cmd.bindPipeline(bindPoint, pipeline.pipeline);
-    cmd.bindDescriptorSets(bindPoint, pipeline.pipelineLayout, 0, 1, &pipeline.set, 0, nullptr);
+}
+
+void CommandBuffer::bind_descriptors(const vk::PipelineBindPoint bind, const Pipeline &_pipeline) {
+    pipeline = _pipeline;
+    cmd.bindDescriptorSets(bind, pipeline.pipelineLayout, 0, 1, &pipeline.set, 0, nullptr);
 }
 
 Buffer CommandBuffer::make_staging_buffer(const u64 allocSize) const
@@ -311,7 +315,7 @@ Buffer CommandBuffer::make_staging_buffer(const u64 allocSize) const
     bufferInfo.size = allocSize;
     bufferInfo.usage = vk::BufferUsageFlagBits::eTransferSrc;
 
-    VmaAllocationCreateFlags allocationFlags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    constexpr VmaAllocationCreateFlags allocationFlags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
     VmaAllocationCreateInfo allocationCI;
     allocationCI.flags = allocationFlags;
     allocationCI.usage = VMA_MEMORY_USAGE_AUTO;

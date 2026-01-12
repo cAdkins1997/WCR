@@ -18,11 +18,12 @@ public:
     Application(std::string_view appName, u32 width, u32 height);
     ~Application();
 
-    void draw() const;
-    void run() const;
+    void draw();
+    void run();
     void update() const;
     void init();
     void init_opaque_pipeline();
+    void init_transparent_pipeline();
     void init_descriptors();
     void init_scene_data();
 
@@ -35,4 +36,5 @@ private:
     std::unique_ptr<ImGUIManager> imguiManager;
     SceneHandle testScene{};
     Pipeline opaquePipeline;
+    Pipeline transparentPipeline;
 };

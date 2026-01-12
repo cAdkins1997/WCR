@@ -114,7 +114,7 @@ void SceneManager::assert_handle(const SamplerHandle handle) const {
     assert(m_resourceData->samplerMetadata[index] == metaData);
 }
 
-void SceneManager::draw_scene(const CommandBuffer &cmd, const SceneHandle handle, const glm::mat4 &viewProjectionMatrix) {
+void SceneManager::draw_scene_opaque(const CommandBuffer &cmd, const SceneHandle handle, const glm::mat4 &viewProjectionMatrix, const glm::vec3& position) {
     pc.vertexBuffer = m_resourceData->vertexBuffer.deviceAddress;
     pc.materialBuffer = m_resourceData->materialBuffer.deviceAddress;
     pc.pointLightBuffer = m_resourceData->pointLightBuffer.deviceAddress;
@@ -126,44 +126,81 @@ void SceneManager::draw_scene(const CommandBuffer &cmd, const SceneHandle handle
     cmd.bind_index_buffer(m_resourceData->indexBuffer);
     cpu_frustum_culling(scene, viewProjectionMatrix);
 
-
-    for (const auto&[surface, worldMatrix] : m_renderables) {
+    for (const auto&[surface, worldMatrix] : m_OpaqueRenderables) {
         pc.renderMatrix = worldMatrix;
         pc.materialIndex = get_handle_index(surface.material);
         cmd.set_push_constants(&pc, sizeof(pc), vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment);
         cmd.draw(surface.indexCount, surface.initialIndex);
     }
 
-    m_renderables.clear();
+    m_OpaqueRenderables.clear();
+}
+
+void SceneManager::draw_scene_transparent(const CommandBuffer &cmd, const SceneHandle handle, const glm::mat4 &viewProjectionMatrix, const glm::vec3 &position) {
+    for (const auto&[surface, worldMatrix] : m_blendedRenderables) {
+        pc.renderMatrix = worldMatrix;
+        pc.materialIndex = get_handle_index(surface.material);
+        cmd.set_push_constants(&pc, sizeof(pc), vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment);
+        cmd.draw(surface.indexCount, surface.initialIndex);
+    }
+
+    sort_transparencies(position);
+    m_blendedRenderables.clear();
+
 }
 
 void SceneManager::cpu_frustum_culling(const Scene& scene, const glm::mat4 &viewProjectionMatrix) {
     const Frustum viewFrustum = compute_frustum(viewProjectionMatrix);
 
-    for (const auto& NodeHandle : scene.opaqueNodes) {
-        const auto& node = get_node(NodeHandle);
-        auto& mesh = get_mesh(node.mesh);
-
-        for (auto& surface : mesh.surfaces) {
-            AABB transformedAABB = recompute_aabb(surface.boundingVolume, node.worldMatrix);
-            const auto [min, max] = transformedAABB;
-            bool visible = true;
-            for (const auto& plane : viewFrustum) {
-                int out = 0;
-                out += dot(plane, glm::vec4(min.x, min.y, min.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
-                out += dot(plane, glm::vec4(max.x, min.y, min.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
-                out += dot(plane, glm::vec4(min.x, max.y, min.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
-                out += dot(plane, glm::vec4(max.x, max.y, min.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
-                out += dot(plane, glm::vec4(min.x, min.y, max.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
-                out += dot(plane, glm::vec4(max.x, min.y, max.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
-                out += dot(plane, glm::vec4(min.x, max.y, max.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
-                out += dot(plane, glm::vec4(max.x, max.y, max.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
-                if (out == 8) visible = false;
-            }
-
-            if (visible) m_renderables.push_back({surface, node.worldMatrix});
+    for (const auto&[surface, worldMatrix] : scene.opaqueRenderables) {
+        AABB transformedAABB = recompute_aabb(surface.boundingVolume, worldMatrix);
+        const auto [min, max] = transformedAABB;
+        bool visible = true;
+        for (const auto& plane : viewFrustum) {
+            int out = 0;
+            out += dot(plane, glm::vec4(min.x, min.y, min.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
+            out += dot(plane, glm::vec4(max.x, min.y, min.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
+            out += dot(plane, glm::vec4(min.x, max.y, min.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
+            out += dot(plane, glm::vec4(max.x, max.y, min.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
+            out += dot(plane, glm::vec4(min.x, min.y, max.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
+            out += dot(plane, glm::vec4(max.x, min.y, max.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
+            out += dot(plane, glm::vec4(min.x, max.y, max.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
+            out += dot(plane, glm::vec4(max.x, max.y, max.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
+            if (out == 8) visible = false;
         }
+
+        if (visible) m_OpaqueRenderables.push_back({surface, worldMatrix});
     }
+
+    for (const auto&[surface, worldMatrix] : scene.blendedRenderables) {
+        AABB transformedAABB = recompute_aabb(surface.boundingVolume, worldMatrix);
+        const auto [min, max] = transformedAABB;
+        bool visible = true;
+        for (const auto& plane : viewFrustum) {
+            int out = 0;
+            out += dot(plane, glm::vec4(min.x, min.y, min.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
+            out += dot(plane, glm::vec4(max.x, min.y, min.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
+            out += dot(plane, glm::vec4(min.x, max.y, min.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
+            out += dot(plane, glm::vec4(max.x, max.y, min.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
+            out += dot(plane, glm::vec4(min.x, min.y, max.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
+            out += dot(plane, glm::vec4(max.x, min.y, max.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
+            out += dot(plane, glm::vec4(min.x, max.y, max.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
+            out += dot(plane, glm::vec4(max.x, max.y, max.z, 1.0f)) < 0.0f ? 1.0f : 0.0f;
+            if (out == 8) visible = false;
+        }
+
+        if (visible) m_blendedRenderables.push_back({ surface, worldMatrix });
+    }
+}
+
+void SceneManager::sort_transparencies(const glm::vec3& position) {
+    glm::vec4 pos(position, 0.0f);
+    std::ranges::sort(m_blendedRenderables, [&pos](const Renderable& prev, const Renderable& curr) {
+        constexpr glm::vec4 meshPos(1.0f);
+        const f32 currentPos = glm::length((meshPos * curr.worldMatrix) - pos);
+        const f32 prevPos = glm::length((meshPos * prev.worldMatrix) - pos);
+        return currentPos > prevPos;
+    });
 }
 
 void SceneManager::update_light_buffer(const CommandBuffer& cmd) const {
@@ -399,7 +436,7 @@ std::optional<SceneHandle> SceneBuilder::build_scene(fastgltf::Asset &asset) {
 
     auto& scenes = m_resourceData->scenes;
     auto& sceneMetadata = m_resourceData->sceneMetadata;
-    u16 metadata = scenes.size();
+    const u16 metadata = scenes.size();
     auto handle = static_cast<SceneHandle>(metadata << 16 | scenes.size());
 
     scenes.push_back(std::move(newScene));
@@ -454,18 +491,18 @@ void SceneBuilder::create_nodes(const fastgltf::Asset& asset, Scene& scene) cons
             const u16 meshMetadata = get_metadata_at_index(gltfNode.meshIndex.value());
             node.mesh = static_cast<MeshHandle>(meshMetadata << 16 | gltfNode.meshIndex.value());
 
-            auto type = MaterialType::opaque;
             auto mesh = m_resourceData->meshes[get_handle_index(node.mesh)];
             for (const auto& surface : mesh.surfaces) {
-                const auto material = m_resourceData->materials[get_handle_index(surface.material)];
-                [[unlikely]] if (material.baseColorFactor.a < 1.0f)
-                    type = MaterialType::transparent;
-            }
 
-            if (type == MaterialType::opaque)
-                scene.opaqueNodes.push_back(handle);
-            else
-                scene.transparentNodes.push_back(handle);
+                switch (const auto material = m_resourceData->materials[get_handle_index(surface.material)]; material.type) {
+                    case MaterialType::opaque:
+                        scene.opaqueRenderables.push_back({surface, node.localMatrix} ); break;
+                    case MaterialType::transparentBlend:
+                        scene.blendedRenderables.push_back({ surface, node.localMatrix } ); break;
+                    case MaterialType::transparentMasked:
+                        scene.maskedRenderables.push_back({ surface, node.localMatrix } ); break;
+                }
+            }
         }
 
         nodes.push_back(node);
@@ -587,7 +624,10 @@ void SceneBuilder::create_materials(const fastgltf::Asset &asset, Scene &scene) 
         if (gltfMaterial.pbrData.baseColorTexture.has_value()) {
             auto textureIndex = gltfMaterial.pbrData.baseColorTexture.value().textureIndex;
             material.baseColorTexture = static_cast<TextureHandle>(textureIndex);
-        };
+        }
+        else {
+            material.baseColorFactor = glm::vec4(1.0f);
+        }
 
         if (gltfMaterial.normalTexture.has_value()) {
             auto textureIndex = gltfMaterial.normalTexture.value().textureIndex;
@@ -611,6 +651,20 @@ void SceneBuilder::create_materials(const fastgltf::Asset &asset, Scene &scene) 
         if (gltfMaterial.emissiveTexture.has_value()) {
             auto textureIndex = gltfMaterial.emissiveTexture.value().textureIndex;
             material.emissiveTexture = static_cast<TextureHandle>(textureIndex);
+        }
+
+        switch (gltfMaterial.alphaMode) {
+            case fastgltf::AlphaMode::Opaque:
+                material.type = MaterialType::opaque;
+                break;
+            case fastgltf::AlphaMode::Blend:
+                material.type = MaterialType::transparentBlend;
+                break;
+            case fastgltf::AlphaMode::Mask:
+                material.type = MaterialType::transparentMasked;
+                break;
+            default:
+                break;
         }
 
         material.emissiveStrength = gltfMaterial.emissiveStrength;
@@ -734,7 +788,7 @@ void SceneBuilder::create_images(const std::span<ktxTexture*> ktxTexturePs, Scen
     auto& textureMetadata = m_resourceData->texturesMetadata;
     textures.reserve(ktxTexturePs.size());
 
-    for (auto ktxTextureP : ktxTexturePs) {
+    for (const auto ktxTextureP : ktxTexturePs) {
         Image texture = m_context.create_image(
             { ktxTextureP->baseWidth, ktxTextureP->baseHeight, 1 },
             VK_FORMAT_BC7_SRGB_BLOCK,

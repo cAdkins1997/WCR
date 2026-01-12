@@ -15,6 +15,7 @@
 
 #include <ktx.h>
 
+class Camera;
 typedef ktx_uint64_t ku64;
 typedef ktx_uint32_t ku32;
 typedef ktx_uint16_t ku16;
@@ -76,7 +77,7 @@ enum class MaterialPass : u8 {
 };
 
 enum class MaterialType : u8 {
-    transparent, opaque, invalid
+    opaque, transparentBlend, transparentMasked
 };
 
 struct Material {
@@ -89,6 +90,7 @@ struct Material {
     TextureHandle occlusionTexture{};
     TextureHandle emissiveTexture{};
     u32 bufferOffset{};
+    MaterialType type{};
 };
 
 struct GPUMaterial {
@@ -158,10 +160,11 @@ struct PushConstants {
 struct Scene {
     std::vector<NodeHandle> nodes;
     std::vector<NodeHandle> renderableNodes;
-    std::vector<NodeHandle> opaqueNodes;
-    std::vector<NodeHandle> transparentNodes;
     std::vector<NodeHandle> lightNodes;
     std::vector<MeshHandle> meshes;
+    std::vector<Renderable> opaqueRenderables;
+    std::vector<Renderable> blendedRenderables;
+    std::vector<Renderable> maskedRenderables;
     std::vector<MaterialHandle> materials;
     std::vector<SamplerHandle> samplers;
     std::vector<TextureHandle> textures;
@@ -209,8 +212,10 @@ public:
                 numSurfaces++;
     };
 
-    void draw_scene(const CommandBuffer& cmd, SceneHandle handle, const glm::mat4& viewProjectionMatrix);
+    void draw_scene_opaque(const CommandBuffer &cmd, const SceneHandle handle, const glm::mat4 &viewProjectionMatrix, const glm::vec3& position);
+    void draw_scene_transparent(const CommandBuffer &cmd, const SceneHandle handle, const glm::mat4 &viewProjectionMatrix, const glm::vec3& position);
     void cpu_frustum_culling(const Scene& scene, const glm::mat4& viewProjectionMatrix);
+    void sort_transparencies(const glm::vec3& position);
 
     [[nodiscard]] Scene& get_scene(SceneHandle handle) const;
     [[nodiscard]] Node& get_node(NodeHandle handle) const;
@@ -227,8 +232,8 @@ public:
     [[nodiscard]] u64 get_num_spot_lights() const { return m_resourceData->spotLights.size(); }
 
     void update_light_buffer(const CommandBuffer& cmd) const;
-    PointLightHandle add_point_light(const PointLight& light) const;
-    SpotLightHandle add_spot_light(const SpotLight& light) const;
+    [[nodiscard]] PointLightHandle add_point_light(const PointLight& light) const;
+    [[nodiscard]] SpotLightHandle add_spot_light(const SpotLight& light) const;
 
     void remove_point_light(PointLightHandle handle) const;
     void remove_point_light(u32 index) const;
@@ -241,7 +246,9 @@ public:
 
 private:
     std::shared_ptr<ResourceData> m_resourceData;
-    std::vector<Renderable> m_renderables;
+    std::vector<Renderable> m_OpaqueRenderables;
+    std::vector<Renderable> m_blendedRenderables;
+    std::vector<Renderable> m_maskedRenderables;
     PushConstants pc{};
     u64 numSurfaces = 0;
 

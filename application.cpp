@@ -90,7 +90,7 @@ Application::~Application() {
     deviceHandle.destroyDescriptorSetLayout(opaquePipeline.setLayout);
 }
 
-void Application::draw() const {
+void Application::draw() {
     const auto currentFrameTime = static_cast<f32>(glfwGetTime());
     deltaTime = currentFrameTime - lastFrameTime;
     lastFrameTime = currentFrameTime;
@@ -127,10 +127,14 @@ void Application::draw() const {
 
         commandBuffer.set_up_render_pass(displayExtent, &drawAttachment, &depthAttachment);
         commandBuffer.bind_pipeline(vk::PipelineBindPoint::eGraphics, opaquePipeline);
+        commandBuffer.bind_descriptors(vk::PipelineBindPoint::eGraphics, opaquePipeline);
         commandBuffer.set_viewport(displayExtent, 0.0f, 1.0f);
         commandBuffer.set_scissor(displayExtent);
 
-        sceneManager->draw_scene(commandBuffer, testScene, sceneData.projection * sceneData.view);
+        sceneManager->draw_scene_opaque(commandBuffer, testScene, sceneData.projection * sceneData.view, camera.Position);
+
+        commandBuffer.bind_pipeline(vk::PipelineBindPoint::eGraphics, transparentPipeline);
+        sceneManager->draw_scene_transparent(commandBuffer, testScene, sceneData.projection * sceneData.view, camera.Position);
 
         commandBuffer.end_render_pass();
 
@@ -155,7 +159,7 @@ void Application::draw() const {
     });
 }
 
-void Application::run() const {
+void Application::run() {
     while (!glfwWindowShouldClose(context->p_get_window()))
     {
         glfwPollEvents();
@@ -173,6 +177,7 @@ void Application::init()
     init_scene_data();
     init_descriptors();
     init_opaque_pipeline();
+    init_transparent_pipeline();
 }
 
 void Application::init_opaque_pipeline() {
@@ -197,6 +202,28 @@ void Application::init_opaque_pipeline() {
     context->destroy_shader(fragShader);
 }
 
+void Application::init_transparent_pipeline() {
+    const Shader vertShader = context->create_shader("../shaders/bin/slang/vertex.slang.spv");
+    const Shader fragShader = context->create_shader("../shaders/bin/slang/pbr.slang.spv");
+
+    PipelineBuilder pipelineBuilder;
+    pipelineBuilder.pipelineLayout = transparentPipeline.pipelineLayout;
+    pipelineBuilder.set_shader(vertShader.module, fragShader.module);
+    pipelineBuilder.set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+    pipelineBuilder.set_polygon_mode(VK_POLYGON_MODE_FILL);
+
+    pipelineBuilder.set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+    pipelineBuilder.set_multisampling_none();
+    pipelineBuilder.enable_depthtest(vk::True, VK_COMPARE_OP_GREATER_OR_EQUAL);
+    pipelineBuilder.enable_blending_alphablend();
+    pipelineBuilder.set_color_attachment_format(context->get_draw_image().format);
+    pipelineBuilder.set_depth_format(context->get_depth_image().format);
+    transparentPipeline.pipeline = pipelineBuilder.build_pipeline(context->get_device());
+
+    context->destroy_shader(vertShader);
+    context->destroy_shader(fragShader);
+}
+
 void Application::init_descriptors() {
     descriptorBuilder = std::make_unique<DescriptorBuilder>(context->get_device());
     const auto globalSet = descriptorBuilder->build(opaquePipeline.setLayout);
@@ -215,6 +242,7 @@ void Application::init_descriptors() {
 
     const auto globalPipelineLayout = context->get_device_handle().createPipelineLayout(pipelineLayoutInfo, nullptr);
     opaquePipeline.pipelineLayout = globalPipelineLayout;
+    transparentPipeline.pipelineLayout = globalPipelineLayout;
 }
 
 void Application::init_scene_data() {

@@ -44,6 +44,7 @@ public:
 
     void set_handle(const vk::CommandBuffer& _cmd) { cmd = _cmd; }
     void bind_pipeline(vk::PipelineBindPoint bindPoint, const Pipeline& _pipeline);
+    void bind_descriptors(vk::PipelineBindPoint bind, const Pipeline& _pipeline);
     void set_allocator(const VmaAllocator& _allocator) { allocator = _allocator; }
 
     [[nodiscard]] vk::CommandBuffer get_handle() const { return cmd; }
